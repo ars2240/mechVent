@@ -26,9 +26,9 @@ model_prefix = "LSTM_rsample_os3_s133_normstat_"
 # whether to re-make the negative and positive sample data or load existing from file
 # if changing train, pred, or before_intub hours should NOT use "existing" 
 # set to "new" to save out the new positive and negative samples generated in this run
-neg_pos_save = "existing"
+neg_pos_save = "new"
 # same deal as negative/positive data - can set to new to save out or existing to load existing save of train/val/test pickled dictionary data
-train_val_test_save = "existing"
+train_val_test_save = "new"
 # oversample amount - must be an int, the positive cases in the training data will be replicated this number of times
 oversample_by = 3
 # flag whether to use resampling during training
