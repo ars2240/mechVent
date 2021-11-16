@@ -17,9 +17,10 @@ from datetime import datetime
 
 # user inputs - script is designed so that you can just make changes in this seection and then re-run for testing purposes
 # data directory where the time series data will be loaded from
-time_data_dir = "../data/imputed/"
+time_data_dir = "home/securedata/data/imputed/"
 # data directory where the static data will be loaded from
-static_data_dir = "../data/raw_data/"
+static_data_dir = "home/securedata/data/raw_data/"
+model_dir = 'home/securedata/data/'
 # model prefix -- will appear in tracking file and artefact file names
 model_prefix = "LSTM_rsample_os3_s133_normstat_"
 # whether to re-make the negative and positive sample data or load existing from file
@@ -116,7 +117,7 @@ device = torch.device('cuda')
 model_id = model_prefix + str(num_epochs) + '_' + str(hidden_size) + \
     '_' + str(lr).split('.')[1]
 
-tracker = track.CSVTracker('../results/experiment_tracking.csv')
+tracker = track.CSVTracker('home/securedata/results/experiment_tracking.csv')
 
 tracker.is_model_unique(model_id)
 
@@ -287,6 +288,9 @@ test_roc_auc = auc(test_fpr, test_tpr)
 
 test_roc_path = 'results/' + model_id + '/' + model_id + '_test_roc.png'
 nnfuncs.plot_roc(test_fpr, test_tpr, test_roc_auc, test_roc_path)
+
+model.to('cpu')
+torch.save(model.state_dict(), 'results/' + model_id + '/' + model_id + '_model.pt')
 
 tracking_dict = {}
 tracking_dict['model_type'] = model_id.split('_')[0]
