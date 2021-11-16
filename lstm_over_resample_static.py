@@ -17,10 +17,10 @@ from datetime import datetime
 
 # user inputs - script is designed so that you can just make changes in this seection and then re-run for testing purposes
 # data directory where the time series data will be loaded from
-time_data_dir = "home/securedata/data/imputed/"
+time_data_dir = "/home/securedata/data/imputed/"
 # data directory where the static data will be loaded from
-static_data_dir = "home/securedata/data/raw_data/"
-model_dir = 'home/securedata/data/'
+static_data_dir = "/home/securedata/data/raw_data/"
+model_dir = '/home/securedata/data/'
 # model prefix -- will appear in tracking file and artefact file names
 model_prefix = "LSTM_rsample_os3_s133_normstat_"
 # whether to re-make the negative and positive sample data or load existing from file
