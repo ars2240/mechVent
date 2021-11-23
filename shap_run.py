@@ -1,4 +1,4 @@
-from shap import *
+from shap_model import *
 import os
 import sys
 sys.path.insert(1, '/Users/adamsandler/Documents/Northwestern/Research/Optimization with Bounded Eigenvalues/')
