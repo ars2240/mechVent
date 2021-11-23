@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import shap as s
 
 
 class shap(object):
@@ -120,5 +121,27 @@ class shap(object):
     def run(self, train_loader, test_loader=None):
         self.train(train_loader)
         self.test(test_loader)
+
+    def test_explainer(self, loader=None):
+        explainer = s.Explainer(self.model)
+        loader = self.dataloader if loader is None else loader
+        shap = []
+        for _, data in enumerate(loader):
+            input, _ = data
+            shap.append(explainer(input))
+
+        shap = torch.cat(shap)
+
+        """
+        import matplotlib.pyplot as plt
+        plt.hist(shap.flatten(), bins=20)
+        plt.savefig('./shap_hist.png')
+        """
+
+        return shap
+
+    def explainer(self, loader):
+        shap = self.test_explainer(loader)
+        print(shap)
 
 
