@@ -19,5 +19,5 @@ def alpha(k):
 
 
 s = shap(model, './models/USPS_SGD_mu0_K0_trained_model_best.pt', alpha=alpha)
-s.explainer(test_loader)
+s.explainer(train_loader, test_loader)
 # s.run(train_loader, test_loader)

@@ -123,25 +123,32 @@ class shap(object):
         self.test(test_loader)
 
     def test_explainer(self, loader=None):
-        explainer = s.Explainer(self.model)
         loader = self.dataloader if loader is None else loader
-        shap = []
-        for _, data in enumerate(loader):
-            input, _ = data
-            shap.append(explainer(input))
 
-        shap = torch.cat(shap)
+        with torch.no_grad():
+            sh = []
+            e = s.KernelExplainer(self.model, self.v.view(1, -1).detach().numpy())
+            for _, data in enumerate(loader):
+                input, _ = data
+                input = input.to(self.device).view(input.shape[0], -1)
+                sh.append(e.shap_values(input.detach().numpy()))
 
-        """
+        sh = np.concatenate(sh, axis=1)
+        if sh.ndim == 3:
+            sh = np.moveaxis(sh, [0, 1, 2], [2, 0, 1])
+            sh = np.reshape(sh, (sh.shape[0], -1))
+
+        #"""
         import matplotlib.pyplot as plt
-        plt.hist(shap.flatten(), bins=20)
+        plt.hist(sh.flatten(), bins=20)
         plt.savefig('./shap_hist.png')
-        """
+        #"""
 
-        return shap
+        return sh
 
-    def explainer(self, loader):
-        shap = self.test_explainer(loader)
-        print(shap)
+    def explainer(self, train_loader, loader):
+        self.train(train_loader)
+        sh = self.test_explainer(loader)
+        np.savetxt("shap_values.csv", sh, delimiter=",")
 
 
