@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-import shap as s
+from kernel import Kernel
 
 
 class shap(object):
@@ -127,7 +127,7 @@ class shap(object):
 
         with torch.no_grad():
             sh = []
-            e = s.KernelExplainer(self.model, self.v.view(1, -1).detach().numpy())
+            e = Kernel(self.model, self.v.view(1, -1).detach().numpy())
             for _, data in enumerate(loader):
                 input, _ = data
                 input = input.to(self.device).view(input.shape[0], -1)
