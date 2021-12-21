@@ -1,5 +1,6 @@
 from shap.utils._legacy import convert_to_instance, convert_to_model, match_instance_to_data, match_model_to_data
-from shap.utils._legacy import convert_to_instance_with_index, convert_to_link, IdentityLink, convert_to_data, DenseData, SparseData
+from shap.utils._legacy import convert_to_instance_with_index, convert_to_link, IdentityLink, convert_to_data,\
+    DenseData, SparseData
 from shap.utils import safe_isinstance
 from scipy.special import binom
 from scipy.sparse import issparse
@@ -15,7 +16,6 @@ from tqdm.auto import tqdm
 from shap import Explainer
 
 log = logging.getLogger('shap')
-
 
 
 class Kernel(Explainer):
@@ -89,7 +89,8 @@ class Kernel(Explainer):
         # find E_x[f(x)]
         if isinstance(model_null, (pd.DataFrame, pd.Series)):
             model_null = np.squeeze(model_null.values)
-        if safe_isinstance(model_null, "tensorflow.python.framework.ops.EagerTensor") or safe_isinstance(model_null, "torch.Tensor"):
+        if safe_isinstance(model_null, "tensorflow.python.framework.ops.EagerTensor") or \
+                safe_isinstance(model_null, "torch.Tensor"):
             model_null = model_null.numpy()
         self.fnull = np.sum((model_null.T * self.data.weights).T, 0)
         self.expected_value = self.linkfv(self.fnull)
