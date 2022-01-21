@@ -4,8 +4,12 @@ import torch.nn as nn
 
 class LSTM(nn.Module):
 
-    def __init__(self, sequence_length, hidden_size, num_layers):
+    def __init__(self, sequence_length, hidden_size, num_layers, use_gpu=False):
         super(LSTM, self).__init__()
+        if use_gpu and torch.cuda.is_available():
+            self.device = torch.device('cuda')
+        else:
+            self.device = torch.device('cpu')
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.sequence_length = sequence_length
@@ -24,8 +28,8 @@ class LSTM(nn.Module):
 
     def init_hidden(self, x):
         self.batch_size = x.size()[0]
-        self.hidden_cell = (torch.zeros(num_layers, self.batch_size, hidden_size, device=device),
-                            torch.zeros(num_layers, self.batch_size, hidden_size, device=device))
+        self.hidden_cell = (torch.zeros(self.num_layers, self.batch_size, self.hidden_size, device=self.device),
+                            torch.zeros(self.num_layers, self.batch_size, self.hidden_size, device=self.device))
 
     def forward(self, x_time, x_stat):
         self.init_hidden(x_time)
