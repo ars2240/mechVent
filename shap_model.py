@@ -56,17 +56,28 @@ class shap(object):
         print('epoch\t loss')
         for i in range(self.max_iter):
             for _, data in enumerate(loader):
-                print(len(data))
-                input, _ = data
-                input = input.to(self.device)
+                if len(data) == 2:
+                    input, _ = data
+                    input, input2 = input.to(self.device), None
+                elif len(data) == 3:
+                    input, input2, _ = data
+                    input, input2 = input.to(self.device), input2.to(self.device)
+                else:
+                    raise Exception('Invalid number of inputs')
 
                 # initialize v
                 if self.v is None:
-                    self.v = self.random_v(np.prod(input.shape[1:]))
+                    if input2 is None:
+                        self.v = self.random_v(np.prod(input.shape[1:]))
+                    else:
+                        self.v = self.random_v(np.prod(input.shape[1:]) + np.prod(input2.shape[1:]))
                     self.v.requires_grad_()
 
                 # compute forward & backward pass
-                output = self.model(input)
+                if input2 is None:
+                    output = self.model(input)
+                else:
+                    output = self.model(input, input2)
                 loss = self.f(output).sum()
                 loss.backward()
                 if mean is None:
@@ -86,19 +97,29 @@ class shap(object):
             # print(self.v)
             print('%d\t %f' % (i, self.f(mean).item()))
 
-    def shap(self, input):
+    def shap(self, input, input2=None):
         # compute shap scores on a batch
-        output = self.model(input)
+
+        if input2 is None:
+            output = self.model(input)
+        else:
+            output = self.model(input, input2)
 
         lv = len(self.v)
 
-        shap = torch.zeros((input.shape[0], lv))
+        if input2 is None:
+            shap = torch.zeros((input.shape[0], lv))
+        else:
+            shap = torch.zeros((input.shape[0]+input2.shape[0], lv))
         with torch.no_grad():
             for i in range(lv):
-                input2 = input.view(-1, lv)
-                input2[:, i] = self.v[i]
-                output2 = self.model(input2.view(input.shape))
-                shap[:, i] = (output2 - output).mean(dim=1)
+                if input2 is None:
+                    inputr = input.view(-1, lv)
+                    inputr[:, i] = self.v[i]
+                    output2 = self.model(inputr.view(input.shape))
+                    shap[:, i] = (output2 - output).mean(dim=1)
+                else:
+                    raise Exception('Not implemented for multiple inputs.')
 
         return shap.view(input.shape)
 
@@ -106,8 +127,15 @@ class shap(object):
         loader = self.dataloader if loader is None else loader
         shap = []
         for _, data in enumerate(loader):
-            input, _ = data
-            shap.append(self.shap(input))
+            if len(data) == 2:
+                input, _ = data
+                input, input2 = input.to(self.device), None
+            elif len(data) == 3:
+                input, input2, _ = data
+                input, input2 = input.to(self.device), input2.to(self.device)
+            else:
+                raise Exception('Invalid number of inputs')
+            shap.append(self.shap(input, input2))
 
         shap = torch.cat(shap)
 
@@ -130,8 +158,14 @@ class shap(object):
             sh = []
             e = Kernel(self.model, self.v.view(1, -1).detach().numpy())
             for _, data in enumerate(loader):
-                input, _ = data
-                input = input.to(self.device).view(input.shape[0], -1)
+                if len(data) == 2:
+                    input, _ = data
+                    input, input2 = input.to(self.device), None
+                    input = input.view(input.shape[0], -1)
+                elif len(data) == 3:
+                    input, input2, _ = data
+                    input, input2 = input.to(self.device), input2.to(self.device)
+                    input = torch.cat((input.view(input.shape[0], -1), input2.view(input.shape[0], -1)), 1)
                 sh.append(e.shap_values(input.detach().numpy()))
 
         sh = np.concatenate(sh, axis=1)
