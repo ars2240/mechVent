@@ -49,10 +49,9 @@ class shap(object):
 
     def f(self, x, s=None):
         if s is None:
-            return torch.norm(x - self.model(self.v.reshape(1, self.is1[1:])), dim=1) ** 2
+            return torch.norm(x - self.model(self.v.reshape(self.is1)), dim=1) ** 2
         else:
-            return torch.norm(x - self.model(self.v[:s].reshape(1, self.is1[1:]),
-                                             self.v[s:].reshape(1, self.is2[1:])), dim=1) ** 2
+            return torch.norm(x - self.model(self.v[:s].reshape(self.is1), self.v[s:].reshape(self.is2)), dim=1) ** 2
 
     def train(self, loader):
         self.dataloader = loader
@@ -71,9 +70,11 @@ class shap(object):
                     raise Exception('Invalid number of inputs')
 
                 if self.is1 is None:
-                    self.is1 = input.shape
+                    self.is1 = tuple(input.shape)
+                    self.is1[0] = 1
                 if input2 is not None and self.is2 is None:
-                    self.is2 = input2.shape
+                    self.is2 = tuple(input2.shape)
+                    self.is2[0] = 1
 
                 # initialize
                 if self.v is None:
