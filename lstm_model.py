@@ -28,12 +28,13 @@ class LSTM(nn.Module):
 
     def init_hidden(self, x):
         self.batch_size = x.size()[0]
-        self.hidden_cell = (torch.zeros(self.num_layers, self.batch_size, self.hidden_size, device=self.device),
-                            torch.zeros(self.num_layers, self.batch_size, self.hidden_size, device=self.device))
+        self.hidden_cell = (torch.zeros(self.num_layers, self.batch_size, self.hidden_size, dtype=torch.double,
+                                        device=self.device),
+                            torch.zeros(self.num_layers, self.batch_size, self.hidden_size, dtype=torch.double,
+                                        device=self.device))
 
     def forward(self, x_time, x_stat):
         x_time, x_stat = x_time.double(), x_stat.double()
-        print(x_time.type())
         self.init_hidden(x_time)
         # input data x
         # can use multiple inputs to forward method: https://discuss.pytorch.org/t/multiple-input-model-architecture/19754
