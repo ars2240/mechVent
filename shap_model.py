@@ -56,6 +56,7 @@ class shap(object):
         print('epoch\t loss')
         for i in range(self.max_iter):
             for _, data in enumerate(loader):
+                print(data.shape)
                 input, _ = data
                 input = input.to(self.device)
 
