@@ -36,7 +36,6 @@ class LSTM(nn.Module):
     def forward(self, x_time, x_stat):
         x_time, x_stat = x_time.double(), x_stat.double()
         self.init_hidden(x_time)
-        print(self.hidden_cell[0].type())
         # input data x
         # can use multiple inputs to forward method: https://discuss.pytorch.org/t/multiple-input-model-architecture/19754
         # for the view call: batch size, sequence length, cols
@@ -45,6 +44,6 @@ class LSTM(nn.Module):
 
         stat_preds = self.fc2(x_stat.reshape(self.batch_size, -1))
         time_preds = self.fc1(lstm_out.reshape(self.batch_size, -1))
-        preds=torch.cat((stat_preds, time_preds), 1)
+        preds = torch.cat((stat_preds, time_preds), 1)
         preds = self.fc3(preds)
         return preds.view(self.batch_size, -1)

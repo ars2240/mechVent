@@ -44,7 +44,7 @@ class shap(object):
         # load model from file
         state = self.load_state(fname)
         self.model.load_state_dict(state)
-        self.model.to(self.device)
+        self.model = self.model.to(self.device).double()
 
     def f(self, x):
         return torch.norm(x - self.model(self.v), dim=1) ** 2
