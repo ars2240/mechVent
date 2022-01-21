@@ -28,6 +28,7 @@ class LSTM(nn.Module):
                             torch.zeros(num_layers, self.batch_size, hidden_size, device=device))
 
     def forward(self, x_time, x_stat):
+        self.init_hidden(x_time)
         # input data x
         # can use multiple inputs to forward method: https://discuss.pytorch.org/t/multiple-input-model-architecture/19754
         # for the view call: batch size, sequence length, cols
