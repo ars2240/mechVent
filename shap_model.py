@@ -107,7 +107,7 @@ class shap(object):
 
             # evaluate neutral instance
             # print(self.v)
-            print('%d\t %f' % (i, self.f(mean).item()))
+            print('%d\t %f' % (i, self.f(mean, s).item()))
 
     def shap(self, input, input2=None):
         # compute shap scores on a batch
