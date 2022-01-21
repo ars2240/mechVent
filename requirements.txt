@@ -5,5 +5,5 @@ matplotlib
 scipy
 pandas
 scikit-learn
-shap
+shap>=0.40
 feather

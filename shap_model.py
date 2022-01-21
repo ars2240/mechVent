@@ -23,7 +23,10 @@ class shap(object):
     def load_state(self, fname, dic='state_dict'):
 
         try:
-            state = torch.load(fname)
+            if torch.cuda.is_available():
+                state = torch.load(fname)
+            else:
+                state = torch.load(fname, map_location=torch.device('cpu'))
         except RuntimeError:
             state = torch.jit.load(fname)
         if dic in state.keys():
