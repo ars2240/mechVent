@@ -70,10 +70,10 @@ class shap(object):
                     raise Exception('Invalid number of inputs')
 
                 if self.is1 is None:
-                    self.is1 = tuple(input.shape)
+                    self.is1 = list(input.shape)
                     self.is1[0] = 1
                 if input2 is not None and self.is2 is None:
-                    self.is2 = tuple(input2.shape)
+                    self.is2 = list(input2.shape)
                     self.is2[0] = 1
 
                 # initialize
