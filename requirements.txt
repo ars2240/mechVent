@@ -2,7 +2,7 @@ pickle-mixin
 torch
 numpy
 matplotlib
-shap
 scipy
 pandas
 scikit-learn
+git+https://github.com/slundberg/shap/archive/f3369c7.zip
