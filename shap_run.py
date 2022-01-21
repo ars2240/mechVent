@@ -3,13 +3,14 @@ import os
 import pickle
 import sys
 from lstm_model import LSTM
-sys.path.insert(1, '/home/securedata/laurie/')
+h = '/home/securedata/laurie/'
+sys.path.insert(1, h)
 
 import oversample_dict_dataset as ldd
 
-with open("./data/oversample_datasets/test.p", 'rb') as f:
+with open(h + "/data/oversample_datasets/test.p", 'rb') as f:
     test = pickle.load(f)
-with open("./data/oversample_datasets/train.p", 'rb') as f:
+with open(h + "/data/oversample_datasets/train.p", 'rb') as f:
     train = pickle.load(f)
 
 os.chdir('/home/gluster/mechVent/')
@@ -37,6 +38,6 @@ def alpha(k):
     return 1e-4 / (1 + k)
 
 
-s = shap(model, '/home/securedata/laurie/results/oversample_results/' + model_id + '/' + model_id + '.pt', alpha=alpha)
+s = shap(model, h + '/results/oversample_results/' + model_id + '/' + model_id + '.pt', alpha=alpha)
 s.explainer(train_data, test_data)
 # s.run(train_loader, test_loader)
