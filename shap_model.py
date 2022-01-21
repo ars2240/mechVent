@@ -46,13 +46,16 @@ class shap(object):
         self.model.load_state_dict(state)
         self.model = self.model.to(self.device).double()
 
-    def f(self, x):
-        return torch.norm(x - self.model(self.v), dim=1) ** 2
+    def f(self, x, s=None):
+        if s is None:
+            return torch.norm(x - self.model(self.v), dim=1) ** 2
+        else:
+            return torch.norm(x - self.model(self.v[:s], self.v[s:]), dim=1) ** 2
 
     def train(self, loader):
         self.dataloader = loader
         outputs = []
-        mean = None
+        mean, s = None, None
         print('epoch\t loss')
         for i in range(self.max_iter):
             for _, data in enumerate(loader):
@@ -65,12 +68,13 @@ class shap(object):
                 else:
                     raise Exception('Invalid number of inputs')
 
-                # initialize v
+                # initialize
                 if self.v is None:
                     if input2 is None:
                         self.v = self.random_v(np.prod(input.shape[1:]))
                     else:
                         self.v = self.random_v(np.prod(input.shape[1:]) + np.prod(input2.shape[1:]))
+                        s = np.prod(input.shape[1:])
                     self.v.requires_grad_()
 
                 # compute forward & backward pass
@@ -78,7 +82,7 @@ class shap(object):
                     output = self.model(input)
                 else:
                     output = self.model(input, input2)
-                loss = self.f(output).sum()
+                loss = self.f(output, s).sum()
                 loss.backward()
                 if mean is None:
                     outputs.append(output)
