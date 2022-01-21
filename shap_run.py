@@ -2,9 +2,9 @@ from shap_model import *
 import os
 import pickle
 import sys
+from lstm_model import LSTM
 sys.path.insert(1, '/home/securedata/laurie/')
 
-from lstm_over_resample_static import LSTM
 import oversample_dict_dataset as ldd
 
 with open("./data/oversample_datasets/test.p", 'rb') as f:
