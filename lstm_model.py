@@ -35,7 +35,7 @@ class LSTM(nn.Module):
 
     def forward(self, x_time, x_stat):
         x_time, x_stat = x_time.double(), x_stat.double()
-        print(self.hidden_cell.type())
+        print(self.hidden_cell[0].type())
         self.init_hidden(x_time)
         # input data x
         # can use multiple inputs to forward method: https://discuss.pytorch.org/t/multiple-input-model-architecture/19754
