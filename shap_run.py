@@ -38,5 +38,5 @@ def alpha(k):
 
 
 s = shap(model, '/home/securedata/laurie/results/oversample_results/' + model_id + '/' + model_id + '.pt', alpha=alpha)
-s.explainer(train_loader, test_loader)
+s.explainer(train_data, test_data)
 # s.run(train_loader, test_loader)
