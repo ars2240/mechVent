@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -25,6 +26,7 @@ class LSTM(nn.Module):
         self.fc3 = nn.Linear(4, self.num_classes)
         self.batch_size = None
         self.hidden_cell = None
+        self.is1, self.is2 = None, None  # input shapes
 
     def init_hidden(self, x):
         self.batch_size = x.size()[0]
@@ -33,8 +35,21 @@ class LSTM(nn.Module):
                             torch.zeros(self.num_layers, self.batch_size, self.hidden_size, dtype=torch.double,
                                         device=self.device))
 
-    def forward(self, x_time, x_stat):
-        x_time, x_stat = x_time.double(), x_stat.double()
+    def forward(self, x_time, x_stat=None):
+        if self.is1 is None:
+            self.is1 = list(x_time.shape)
+            self.is1[0] = -1
+        if self.is2 is None and x_stat is not None:
+            self.is2 = list(x_stat.shape)
+            self.is2[0] = -1
+
+        if x_stat is None and self.is1 is not None and self.is2 is not None:
+            x_time, x_stat = torch.split(x_time, [-np.prod(self.is1), -np.prod(self.is2)], dim=1)
+        elif x_stat is None:
+            raise Exception('Bad data input, no stored dimensions.')
+
+        x_time, x_stat = x_time.reshape(self.is1).double(), x_stat.reshape(self.is2).double()
+
         self.init_hidden(x_time)
         # input data x
         # can use multiple inputs to forward method: https://discuss.pytorch.org/t/multiple-input-model-architecture/19754

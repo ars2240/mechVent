@@ -16,7 +16,6 @@ class shap(object):
         self.alpha = alpha  # optimizer function, optional (from torch)
         self.max_iter = max_iter  # maximum number of iterations
         self.v = None  # eigenvector
-        self.is1, self.is2 = None, None  # input shapes
 
     def random_v(self, ndim):
         return torch.rand(ndim).to(self.device)
@@ -47,11 +46,8 @@ class shap(object):
         self.model.load_state_dict(state)
         self.model = self.model.to(self.device).double()
 
-    def f(self, x, s=None):
-        if s is None:
-            return torch.norm(x - self.model(self.v.reshape(self.is1)), dim=1) ** 2
-        else:
-            return torch.norm(x - self.model(self.v[:s].reshape(self.is1), self.v[s:].reshape(self.is2)), dim=1) ** 2
+    def f(self, x):
+        return torch.norm(x - self.model(self.v), dim=1) ** 2
 
     def train(self, loader):
         self.dataloader = loader
@@ -69,13 +65,6 @@ class shap(object):
                 else:
                     raise Exception('Invalid number of inputs')
 
-                if self.is1 is None:
-                    self.is1 = list(input.shape)
-                    self.is1[0] = 1
-                if input2 is not None and self.is2 is None:
-                    self.is2 = list(input2.shape)
-                    self.is2[0] = 1
-
                 # initialize
                 if self.v is None:
                     if input2 is None:
@@ -90,7 +79,7 @@ class shap(object):
                     output = self.model(input)
                 else:
                     output = self.model(input, input2)
-                loss = self.f(output, s).sum()
+                loss = self.f(output).sum()
                 loss.backward()
                 if mean is None:
                     outputs.append(output)
@@ -107,7 +96,7 @@ class shap(object):
 
             # evaluate neutral instance
             # print(self.v)
-            print('%d\t %f' % (i, self.f(mean, s).item()))
+            print('%d\t %f' % (i, self.f(mean).item()))
 
     def shap(self, input, input2=None):
         # compute shap scores on a batch
