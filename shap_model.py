@@ -1,6 +1,9 @@
 import torch
 import numpy as np
 from kernel import Kernel
+import warnings
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 class shap(object):
