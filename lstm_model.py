@@ -36,6 +36,11 @@ class LSTM(nn.Module):
                                         device=self.device))
 
     def forward(self, x_time, x_stat=None):
+        if type(x_time).__module__ == 'numpy':
+            x_time = torch.from_numpy(x_time)
+        if type(x_stat).__module__ == 'numpy':
+            x_stat = torch.from_numpy(x_stat)
+
         if self.is1 is None:
             self.is1 = list(x_time.shape)
             self.is1[0] = -1
