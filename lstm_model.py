@@ -44,7 +44,7 @@ class LSTM(nn.Module):
             self.is2[0] = -1
 
         if x_stat is None and self.is1 is not None and self.is2 is not None:
-            x_time, x_stat = torch.split(x_time, [-np.prod(self.is1), -np.prod(self.is2)], dim=1)
+            x_time, x_stat = torch.split(x_time, [-np.prod(self.is1), -np.prod(self.is2)], dim=-1)
         elif x_stat is None:
             raise Exception('Bad data input, no stored dimensions.')
 
