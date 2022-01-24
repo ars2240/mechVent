@@ -12,6 +12,8 @@ class shap(object):
         if use_gpu and torch.cuda.is_available():
             self.device = torch.device('cuda')
         else:
+            if use_gpu:
+                warnings.warn('Cuda unavailable.')
             self.device = torch.device('cpu')
         self.model = model.to(self.device)  # model (from torch)
         self.model_load(fname)  # load model state
