@@ -15,6 +15,8 @@ with open(h + "/data/oversample_datasets/train.p", 'rb') as f:
 
 os.chdir('/home/gluster/mechVent/')
 
+use_gpu = True
+
 pred_hrs = 4
 batch_size = 128
 stat = True
@@ -38,6 +40,6 @@ def alpha(k):
     return 1e-4 / (1 + k)
 
 
-s = shap(model, h + '/results/oversample_results/' + model_id + '/' + model_id + '.pt', alpha=alpha)
+s = shap(model, h + '/results/oversample_results/' + model_id + '/' + model_id + '.pt', alpha=alpha, use_gpu=use_gpu)
 s.explainer(train_data, test_data)
 # s.run(train_loader, test_loader)
