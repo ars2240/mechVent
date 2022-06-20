@@ -52,7 +52,7 @@ class shap(object):
         self.model = self.model.to(self.device).double()
 
     def f(self, x):
-        return torch.norm(x - self.model(self.v), dim=1) ** 2
+        return torch.norm(x - self.model(self.v.view(1, -1)), dim=1) ** 2
 
     def train(self, loader):
         self.dataloader = loader
