@@ -62,28 +62,38 @@ class shap(object):
         for i in range(self.max_iter):
             for _, data in enumerate(loader):
                 if len(data) == 2:
-                    input, _ = data
-                    input, input2 = input.to(self.device), None
+                    x, _ = data
+                    x = x.to(self.device)
+                    x2, x3, x4 = None, None, None
                 elif len(data) == 3:
-                    input, input2, _ = data
-                    input, input2 = input.to(self.device), input2.to(self.device)
+                    x, x2, _ = data
+                    x, x2 = x.to(self.device), x2.to(self.device)
+                    x3, x4 = None, None
+                elif len(data) == 5:
+                    x, x2, x3, x4, _ = data
+                    x, x2, x3, x4 = x.to(self.device), x2.to(self.device), x3.to(self.device), x4.to(self.device)
                 else:
                     raise Exception('Invalid number of inputs')
 
                 # initialize
                 if self.v is None:
-                    if input2 is None:
-                        self.v = self.random_v(np.prod(input.shape[1:]))
+                    if x2 is None:
+                        self.v = self.random_v(np.prod(x.shape[1:]))
+                    elif x3 is None:
+                        self.v = self.random_v(np.prod(x.shape[1:]) + np.prod(x2.shape[1:]))
                     else:
-                        self.v = self.random_v(np.prod(input.shape[1:]) + np.prod(input2.shape[1:]))
-                        s = np.prod(input.shape[1:])
+                        self.v = self.random_v(np.prod(x.shape[1:]) + np.prod(x2.shape[1:]) +
+                                               np.prod(x3.shape[1:]) + np.prod(x4.shape[1:]))
                     self.v.requires_grad_()
 
                 # compute forward & backward pass
-                if input2 is None:
-                    output = self.model(input)
+                if x2 is None:
+                    output = self.model(x)
+                elif x3 is None:
+                    output = self.model(x, x2)
                 else:
-                    output = self.model(input, input2)
+                    inp = x, x2, x3, x4
+                    output = self.model(inp)
                 loss = self.f(output).sum()
                 loss.backward()
                 if mean is None:
