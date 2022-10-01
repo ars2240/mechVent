@@ -113,45 +113,45 @@ class shap(object):
             # print(self.v)
             print('%d\t %f' % (i, self.f(mean).item()))
 
-    def shap(self, input, input2=None):
+    def shap(self, x, x2=None):
         # compute shap scores on a batch
 
-        if input2 is None:
-            output = self.model(input)
+        if x2 is None:
+            output = self.model(x)
         else:
-            output = self.model(input, input2)
+            output = self.model(x, x2)
 
         lv = len(self.v)
 
-        if input2 is None:
-            shap = torch.zeros((input.shape[0], lv))
+        if x2 is None:
+            shap = torch.zeros((x.shape[0], lv))
         else:
-            shap = torch.zeros((input.shape[0]+input2.shape[0], lv))
+            shap = torch.zeros((x.shape[0]+x2.shape[0], lv))
         with torch.no_grad():
             for i in range(lv):
-                if input2 is None:
-                    inputr = input.view(-1, lv)
-                    inputr[:, i] = self.v[i]
-                    output2 = self.model(inputr.view(input.shape))
+                if x2 is None:
+                    xr = x.view(-1, lv)
+                    xr[:, i] = self.v[i]
+                    output2 = self.model(xr.view(x.shape))
                     shap[:, i] = (output2 - output).mean(dim=1)
                 else:
                     raise Exception('Not implemented for multiple inputs.')
 
-        return shap.view(input.shape)
+        return shap.view(x.shape)
 
     def test(self, loader=None):
         loader = self.dataloader if loader is None else loader
         shap = []
         for _, data in enumerate(loader):
             if len(data) == 2:
-                input, _ = data
-                input, input2 = input.to(self.device), None
+                x, _ = data
+                x, x2 = x.to(self.device), None
             elif len(data) == 3:
-                input, input2, _ = data
-                input, input2 = input.to(self.device), input2.to(self.device)
+                x, x2, _ = data
+                x, x2 = x.to(self.device), x2.to(self.device)
             else:
                 raise Exception('Invalid number of inputs')
-            shap.append(self.shap(input, input2))
+            shap.append(self.shap(x, x2))
 
         shap = torch.cat(shap)
 
@@ -167,7 +167,7 @@ class shap(object):
         self.train(train_loader)
         self.test(test_loader)
 
-    def test_explainer(self, loader=None):
+    def test_explainer(self, loader=None, summary=True):
         loader = self.dataloader if loader is None else loader
 
         with torch.no_grad():
@@ -175,19 +175,22 @@ class shap(object):
             e = Kernel(self.model, self.v.view(1, -1).detach().numpy())
             for _, data in enumerate(loader):
                 if len(data) == 2:
-                    input, _ = data
-                    input, input2 = input.to(self.device), None
-                    input = input.view(input.shape[0], -1)
+                    x, _ = data
+                    x = x.to(self.device)
+                    x = x.view(x.shape[0], -1)
                 elif len(data) == 3:
-                    input, input2, _ = data
-                    input, input2 = input.to(self.device), input2.to(self.device)
-                    input = torch.cat((input.view(input.shape[0], -1), input2.view(input.shape[0], -1)), 1)
-                sh.append(e.shap_values(input.detach().numpy()))
+                    x, x2, _ = data
+                    x, x2 = x.to(self.device), x2.to(self.device)
+                    s = x.shape[0]
+                    x = torch.cat((x.view(s, -1), x2.view(s, -1)), 1)
+                elif len(data) == 5:
+                    x, x2, x3, x4, _ = data
+                    x, x2, x3, x4 = x.to(self.device), x2.to(self.device), x3.to(self.device), x4.to(self.device)
+                    s = x.shape[0]
+                    x = torch.cat((x.view(s, -1), x2.view(s, -1), x3.view(s, -1), x4.view(s, -1)), 1)
+                sh.append(e.shap_values(x.detach().numpy()))
 
         sh = np.concatenate(sh, axis=1)
-        if sh.ndim == 3:
-            sh = np.moveaxis(sh, [0, 1, 2], [2, 0, 1])
-            sh = np.reshape(sh, (sh.shape[0], -1))
 
         #"""
         import matplotlib.pyplot as plt
@@ -195,11 +198,20 @@ class shap(object):
         plt.savefig('./shap_hist.png')
         #"""
 
+        if summary:
+            sh = np.mean(np.abs(sh), axis=1)
+
+        if sh.ndim == 3:
+            sh = np.moveaxis(sh, [0, 1, 2], [2, 0, 1])
+            sh = np.reshape(sh, (sh.shape[0], -1))
+        elif sh.ndim == 2:
+            sh = np.moveaxis(sh, [0, 1], [1, 0])
+
         return sh
 
-    def explainer(self, train_loader, loader):
+    def explainer(self, train_loader, loader, summary=True):
         self.train(train_loader)
-        sh = self.test_explainer(loader)
+        sh = self.test_explainer(loader, summary)
         np.savetxt("shap_values.csv", sh, delimiter=",")
 
 
