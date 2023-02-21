@@ -5,12 +5,16 @@ from torchvision import models
 
 
 class FLC(nn.Module):
-    def __init__(self, train_feat, double=False):
+    def __init__(self, train_feat, h1=None, out=1, doub=False):
         super(FLC, self).__init__()
-        h1, out = 1, 1
-        self.fc1 = nn.Linear(train_feat, h1)
-        self.double = double
-        # self.fc2 = nn.Linear(h1, out)
+        self.h1 = h1
+        self.out = out
+        if h1 is not None:
+            self.fc1 = nn.Linear(train_feat, h1)
+            self.fc2 = nn.Linear(h1, out)
+        if h1 is None:
+            self.fc1 = nn.Linear(train_feat, out)
+        self.double = doub
 
     def forward(self, x):
         if type(x).__module__ == 'numpy':
@@ -19,12 +23,13 @@ class FLC(nn.Module):
             x = x.double()
 
         x = F.relu(self.fc1(x))
-        # x = F.relu(self.fc2(x))
+        if self.h1 is not None:
+            x = F.relu(self.fc2(x))
         return x
 
 
 class FLN(nn.Module):
-    def __init__(self, train_feat, nc=4, classes=5, double=False):
+    def __init__(self, train_feat, nc=4, classes=5, h1=None,  doub=False):
         super(FLN, self).__init__()
         """
         self.fl0 = FL0(cur_host=True) if cur_host == 0 else FL0(cur_host=False)
@@ -35,13 +40,18 @@ class FLN(nn.Module):
         self.nc = nc
         self.train_feat = train_feat
         if nc == 2:
-            self.fl0, self.fl1 = FLC(train_feat[0], double), FLC(train_feat[1], double)
+            self.fl0, self.fl1 = FLC(train_feat[0], h1=h1, out=classes, doub=doub),\
+                                 FLC(train_feat[1], h1=h1, out=classes, doub=doub)
         elif nc == 4:
-            self.fl0, self.fl1, self.fl2, self.fl3 = FLC(train_feat[0], double), FLC(train_feat[1], double), \
-                                                     FLC(train_feat[2], double), FLC(train_feat[3], double)
+            self.fl0, self.fl1, self.fl2, self.fl3 = FLC(train_feat[0], h1=h1, out=classes, doub=doub),\
+                                                     FLC(train_feat[1], h1=h1, out=classes, doub=doub),\
+                                                     FLC(train_feat[2], h1=h1, out=classes, doub=doub),\
+                                                     FLC(train_feat[3], h1=h1, out=classes, doub=doub)
+        else:
+            raise Exception('Invalid number of inputs.')
         # self.fc3 = nn.Linear(4, 5)
-        self.fc4 = nn.Linear(nc, classes)
-        self.v = torch.zeros(nc)  # fill-in
+        self.fcf = nn.Linear(nc*classes, classes)
+        self.v = torch.zeros(nc, classes)  # fill-in
         self.S = torch.zeros(nc)  # set of clients
 
     def forward(self, x):
@@ -51,24 +61,28 @@ class FLN(nn.Module):
                 x0, x1 = x
             elif self.nc == 4:
                 x0, x1, x2, x3 = x
+            else:
+                raise Exception('Invalid number of inputs.')
         else:
             tf = np.cumsum(self.train_feat)
             if self.nc == 2:
                 x0, x1 = x[:, :tf[0]], x[:, tf[0]:tf[1]]
             elif self.nc == 4:
                 x0, x1, x2, x3 = x[:, :tf[0]], x[:, tf[0]:tf[1]], x[:, tf[1]:tf[2]], x[:, tf[2]:]
-        fl0 = self.fl0(x0) if self.S[0] else self.v[0]
-        fl1 = self.fl1(x1) if self.S[1] else self.v[1]
+            else:
+                raise Exception('Invalid number of inputs.')
+        fl0 = self.fl0(x0) if self.S[0] else self.v[0].repeat(x0.shape[0], 1)
+        fl1 = self.fl1(x1) if self.S[1] else self.v[1].repeat(x1.shape[0], 1)
         if self.nc >= 3:
-            fl2 = self.fl2(x2) if self.S[2] else self.v[2]
+            fl2 = self.fl2(x2) if self.S[2] else self.v[2].repeat(x2.shape[0], 1)
         if self.nc >= 4:
-            fl3 = self.fl3(x3) if self.S[3] else self.v[3]
+            fl3 = self.fl3(x3) if self.S[3] else self.v[3].repeat(x3.shape[0], 1)
         if self.nc == 2:
             x = torch.cat([fl0, fl1], dim=1)
         elif self.nc == 4:
             x = torch.cat([fl0, fl1, fl2, fl3], dim=1)
         # x = F.relu(self.fc3(x))
-        x = self.fc4(x)
+        x = self.fcf(x)
         x = F.softmax(x, dim=1)
         return x
 

@@ -5,7 +5,9 @@ import PIL
 import torch
 import torch.utils.data as utils_data
 from torchvision import datasets, transforms
+import shutil
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
 import pandas as pd
 
 # set seed
@@ -148,7 +150,7 @@ def cifar_loader(root='./data', batch_size=1, random_seed=1226, valid_size=0.2, 
 
 
 def forest_loader(batch_size=1, test_size=0.2, random_seed=1226, valid_size=0.2, num_workers=0, pin_memory=True,
-                u='https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz'):
+                  u='https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz'):
     # Load Data
     filename2 = download(u)
 
