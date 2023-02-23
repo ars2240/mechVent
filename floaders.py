@@ -183,10 +183,63 @@ def forest_loader(batch_size=1, test_size=0.2, random_seed=1226, valid_size=0.2,
     y_valid = torch.from_numpy(y_valid).long()
 
     x1, x2 = X[:, :14], X[:, 10:]
+    x1 += torch.normal(mean=0, std=1, size=x1.size())
     train_data = utils_data.TensorDataset(x1, x2, y)
     x1, x2 = X_valid[:, :14], X_valid[:, 10:]
+    x1 += torch.normal(mean=0, std=1, size=x1.size())
     valid_data = utils_data.TensorDataset(x1, x2, y_valid)
     x1, x2 = X_test[:, :14], X_test[:, 10:]
+    x1 += torch.normal(mean=0, std=1, size=x1.size())
+    test_data = utils_data.TensorDataset(x1, x2, y_test)
+
+    train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
+                                         pin_memory=pin_memory)
+    valid_loader = utils_data.DataLoader(valid_data, batch_size=batch_size, num_workers=num_workers,
+                                         pin_memory=pin_memory)
+    test_loader = utils_data.DataLoader(test_data, batch_size=batch_size, num_workers=num_workers,
+                                        pin_memory=pin_memory)
+
+    return train_loader, valid_loader, test_loader
+
+
+def taiwan_loader(batch_size=1, test_size=0.2, random_seed=1226, valid_size=0.2, num_workers=0, pin_memory=True,
+                  u='taiwan.csv'):
+    # import dataset
+    data = pd.read_csv('./data' + u, header=None)
+
+    X = data.values[:, 1:]
+    y = data.values[:, 1]
+
+    X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=random_seed)
+
+    X = X.reshape((X.shape[0], 95))
+    X_test = X_test.reshape((X_test.shape[0], 95))
+
+    X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=random_seed)
+
+    # normalize data
+    scaler = StandardScaler()
+    scaler.fit(X)
+    X = scaler.transform(X)
+    X_valid = scaler.transform(X_valid)
+    X_test = scaler.transform(X_test)
+
+    # convert data-types
+    X = torch.from_numpy(X).float()
+    y = torch.from_numpy(y).long()
+    X_test = torch.from_numpy(X_test).float()
+    y_test = torch.from_numpy(y_test).long()
+    X_valid = torch.from_numpy(X_valid).float()
+    y_valid = torch.from_numpy(y_valid).long()
+
+    x1, x2 = X[:, :61], X[:, 40:]
+    x1 += torch.normal(mean=0, std=1, size=x1.size())
+    train_data = utils_data.TensorDataset(x1, x2, y)
+    x1, x2 = X_valid[:, :61], X_valid[:, 40:]
+    x1 += torch.normal(mean=0, std=1, size=x1.size())
+    valid_data = utils_data.TensorDataset(x1, x2, y_valid)
+    x1, x2 = X_test[:, :61], X_test[:, 40:]
+    x1 += torch.normal(mean=0, std=1, size=x1.size())
     test_data = utils_data.TensorDataset(x1, x2, y_test)
 
     train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,

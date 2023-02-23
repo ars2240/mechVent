@@ -5,14 +5,19 @@ from torchvision import models
 
 
 class FLC(nn.Module):
-    def __init__(self, train_feat, h1=None, out=1, doub=False):
+    def __init__(self, train_feat, h1=None, h2=None, out=1, doub=False):
         super(FLC, self).__init__()
         self.h1 = h1
+        self.h2 = h2
         self.out = out
         if h1 is not None:
             self.fc1 = nn.Linear(train_feat, h1)
-            self.fc2 = nn.Linear(h1, out)
-        if h1 is None:
+            if h2 is not None:
+                self.fc2 = nn.Linear(h1, h2)
+                self.fc3 = nn.Linear(h2, out)
+            else:
+                self.fc2 = nn.Linear(h1, out)
+        else:
             self.fc1 = nn.Linear(train_feat, out)
         self.double = doub
 
@@ -25,11 +30,13 @@ class FLC(nn.Module):
         x = F.relu(self.fc1(x))
         if self.h1 is not None:
             x = F.relu(self.fc2(x))
+            if self.h2 is not None:
+                x = F.relu(self.fc3(x))
         return x
 
 
 class FLN(nn.Module):
-    def __init__(self, train_feat, nc=4, classes=5, h1=None,  doub=False):
+    def __init__(self, train_feat, nc=4, classes=5, h1=None, h2=None, doub=False):
         super(FLN, self).__init__()
         """
         self.fl0 = FL0(cur_host=True) if cur_host == 0 else FL0(cur_host=False)
@@ -40,13 +47,13 @@ class FLN(nn.Module):
         self.nc = nc
         self.train_feat = train_feat
         if nc == 2:
-            self.fl0, self.fl1 = FLC(train_feat[0], h1=h1, out=classes, doub=doub),\
-                                 FLC(train_feat[1], h1=h1, out=classes, doub=doub)
+            self.fl0, self.fl1 = FLC(train_feat[0], h1=h1, h2=h2, out=classes, doub=doub),\
+                                 FLC(train_feat[1], h1=h1, h2=h2, out=classes, doub=doub)
         elif nc == 4:
-            self.fl0, self.fl1, self.fl2, self.fl3 = FLC(train_feat[0], h1=h1, out=classes, doub=doub),\
-                                                     FLC(train_feat[1], h1=h1, out=classes, doub=doub),\
-                                                     FLC(train_feat[2], h1=h1, out=classes, doub=doub),\
-                                                     FLC(train_feat[3], h1=h1, out=classes, doub=doub)
+            self.fl0, self.fl1, self.fl2, self.fl3 = FLC(train_feat[0], h1=h1, h2=h2, out=classes, doub=doub),\
+                                                     FLC(train_feat[1], h1=h1, h2=h2, out=classes, doub=doub),\
+                                                     FLC(train_feat[2], h1=h1, h2=h2, out=classes, doub=doub),\
+                                                     FLC(train_feat[3], h1=h1, h2=h2, out=classes, doub=doub)
         else:
             raise Exception('Invalid number of inputs.')
         # self.fc3 = nn.Linear(4, 5)

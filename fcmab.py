@@ -41,6 +41,7 @@ class fcmab(object):
         sys.stdout = old_stdout  # reset output
 
         best_acc = 0
+        map = 0.5
         for i in range(self.n):
 
             # open log
@@ -51,7 +52,12 @@ class fcmab(object):
             # pull clients
             self.theta = np.random.beta(self.alpha, self.beta)
             print(self.theta)
-            self.model.S = self.theta > self.c
+            if type(self.c) == int or type(self.c) == float:
+                self.model.S = self.theta > self.c
+            elif self.c.lower() == 'mean':
+                self.model.S = self.theta > np.mean(map)
+            else:
+                raise Exception('Cutoff not implemented.')
             print(self.model.S)
 
             # adjust weights
@@ -80,7 +86,7 @@ class fcmab(object):
             val_loss, val_acc = self.loss_acc(val_loader, head=self.head + '_val')
 
             # keep best model
-            if self.keep_best and val_acc < best_acc:
+            if self.keep_best and val_acc > best_acc:
                 best_acc = val_acc
                 torch.save(self.model.state_dict(), './models/' + self.head + '_best.pt')
             if not self.keep_best:
@@ -104,10 +110,10 @@ class fcmab(object):
         log_file = open('./logs/' + self.head + '.log', 'a')  # open log file
         sys.stdout = log_file  # write to log file
 
-        print('Host\tTrain\tAcc\tTest\tAcc')
+        print('Train\tAcc\tTest\tAcc')
         train_loss, train_acc = self.loss_acc(train_loader, head=self.head + '_train')
         test_loss, test_acc = self.loss_acc(test_loader, head=self.head + '_test')
-        print("%d\t%f\t%f\t%f\t%f" % (cur_host, train_loss, train_acc, test_loss, test_acc))
+        print("%f\t%f\t%f\t%f" % (train_loss, train_acc, test_loss, test_acc))
 
         # close log
         log_file.close()  # close log file
