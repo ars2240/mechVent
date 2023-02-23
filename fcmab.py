@@ -89,8 +89,6 @@ class fcmab(object):
             if self.keep_best and val_acc > best_acc:
                 best_acc = val_acc
                 torch.save(self.model.state_dict(), './models/' + self.head + '_best.pt')
-            if not self.keep_best:
-                best_acc = val_acc
 
             # adjust priors
             self.alpha += val_acc/100 * self.model.S

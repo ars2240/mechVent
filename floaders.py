@@ -205,7 +205,7 @@ def forest_loader(batch_size=1, test_size=0.2, random_seed=1226, valid_size=0.2,
 def taiwan_loader(batch_size=1, test_size=0.2, random_seed=1226, valid_size=0.2, num_workers=0, pin_memory=True,
                   u='taiwan.csv'):
     # import dataset
-    data = pd.read_csv('./data' + u, header=None)
+    data = pd.read_csv('./data/' + u, header=0)
 
     X = data.values[:, 1:]
     y = data.values[:, 1]
