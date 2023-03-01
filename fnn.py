@@ -45,6 +45,7 @@ class FLN(nn.Module):
         self.fl3 = FL3(cur_host=True) if cur_host == 3 else FL3(cur_host=False)
         """
         self.nc = nc
+        self.classes = classes
         self.train_feat = train_feat
         if nc == 2:
             self.fl0, self.fl1 = FLC(train_feat[0], h1=h1, h2=h2, out=classes, doub=doub),\
@@ -90,7 +91,64 @@ class FLN(nn.Module):
             x = torch.cat([fl0, fl1, fl2, fl3], dim=1)
         # x = F.relu(self.fc3(x))
         x = self.fcf(x)
-        x = F.softmax(x, dim=1)
+        if self.classes == 1:
+            x = torch.sigmoid(x)
+            x = torch.squeeze(x, dim=1)
+        else:
+            x = F.softmax(x, dim=1)
+        return x
+
+
+class FLR(nn.Module):
+    def __init__(self, train_feat, nc=4, classes=5):
+        super(FLR, self).__init__()
+        self.nc = nc
+        self.classes = classes
+        self.train_feat = train_feat
+        if nc == 2:
+            self.fl0, self.fl1 = nn.Linear(train_feat[0], classes), nn.Linear(train_feat[1], classes)
+        elif nc == 4:
+            self.fl0, self.fl1, self.fl2, self.fl3 = nn.Linear(train_feat[0], classes),\
+                                                     nn.Linear(train_feat[1], classes),\
+                                                     nn.Linear(train_feat[2], classes),\
+                                                     nn.Linear(train_feat[3], classes)
+        else:
+            raise Exception('Invalid number of inputs.')
+        self.v = torch.zeros(nc, classes)  # fill-in
+        self.S = torch.zeros(nc)  # set of clients
+
+    def forward(self, x):
+
+        if len(x) == self.nc:
+            if self.nc == 2:
+                x0, x1 = x
+            elif self.nc == 4:
+                x0, x1, x2, x3 = x
+            else:
+                raise Exception('Invalid number of inputs.')
+        else:
+            tf = np.cumsum(self.train_feat)
+            if self.nc == 2:
+                x0, x1 = x[:, :tf[0]], x[:, tf[0]:tf[1]]
+            elif self.nc == 4:
+                x0, x1, x2, x3 = x[:, :tf[0]], x[:, tf[0]:tf[1]], x[:, tf[1]:tf[2]], x[:, tf[2]:]
+            else:
+                raise Exception('Invalid number of inputs.')
+        fl0 = self.fl0(x0) if self.S[0] else self.v[0].repeat(x0.shape[0], 1)
+        fl1 = self.fl1(x1) if self.S[1] else self.v[1].repeat(x1.shape[0], 1)
+        if self.nc >= 3:
+            fl2 = self.fl2(x2) if self.S[2] else self.v[2].repeat(x2.shape[0], 1)
+        if self.nc >= 4:
+            fl3 = self.fl3(x3) if self.S[3] else self.v[3].repeat(x3.shape[0], 1)
+        if self.nc == 2:
+            x = fl0 + fl1
+        elif self.nc == 4:
+            x = fl0 + fl1 + fl2 + fl3
+        if self.classes == 1:
+            x = torch.sigmoid(x)
+            x = torch.squeeze(x, dim=1)
+        else:
+            x = F.softmax(x, dim=1)
         return x
 
 
@@ -118,6 +176,7 @@ class FLCNN(nn.Module):
         """
 
         nc = 2
+        self.classes = classes
         self.fl0 = MyDenseNet121(classCount=classes, isTrained=isTrained)
         self.fl1 = MyDenseNet121(classCount=classes, isTrained=isTrained)
         self.fcf = nn.Linear(nc*classes, classes)
@@ -136,5 +195,9 @@ class FLCNN(nn.Module):
 
         x = torch.cat([fl0, fl1], dim=1)
         x = self.fcf(x)
-        x = F.softmax(x, dim=1)
+        if self.classes == 1:
+            x = torch.sigmoid(x)
+            x = torch.squeeze(x, dim=1)
+        else:
+            x = F.softmax(x, dim=1)
         return x

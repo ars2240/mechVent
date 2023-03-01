@@ -12,8 +12,8 @@ def check_folder(path):
 
 
 class fcmab(object):
-    def __init__(self, model, loss, opt, nc=2, n=10, epochs=10,
-                 c=.5, keep_best=True, head='', conf_matrix=False):
+    def __init__(self, model, loss, opt, nc=2, n=10, epochs=10, c=.5, keep_best=True, head='', conf_matrix=False,
+                 adversarial=None):
 
         self.model = model  # model
         self.loss = loss  # loss
@@ -28,6 +28,7 @@ class fcmab(object):
         self.keep_best = keep_best  # whether or not best model is kept
         self.head = head  # file label
         self.conf_matrix = conf_matrix  # whether or not a confusion matrix is generated
+        self.adversarial = adversarial  # which (if any) clients are adversarial
 
     def train(self, train_loader, val_loader, test_loader):
         check_folder('./logs')
@@ -42,6 +43,7 @@ class fcmab(object):
 
         best_acc = 0
         map = 0.5
+        val_acc_list = []
         for i in range(self.n):
 
             # open log
@@ -82,13 +84,18 @@ class fcmab(object):
                 loss_avg = np.average(loss_list, weights=size)
                 print("%d\t%d\t%f" % (i, epoch, loss_avg))
 
+            self.model.eval()
+
             # compute validation accuracy
             val_loss, val_acc = self.loss_acc(val_loader, head=self.head + '_val')
+            val_acc_list.append(val_acc)
 
             # keep best model
+            print("current: %f, best: %f" % (val_acc, best_acc))
             if self.keep_best and val_acc > best_acc:
                 best_acc = val_acc
                 torch.save(self.model.state_dict(), './models/' + self.head + '_best.pt')
+                print('new high!')
 
             # adjust priors
             self.alpha += val_acc/100 * self.model.S
@@ -128,7 +135,10 @@ class fcmab(object):
             raise Exception("Number of clients not implemented.")
 
         out = self.model(x)
-        l = self.loss(out, y)
+        if self.model.classes == 1:
+            l = self.loss(torch.squeeze(out).float(), y.float())
+        else:
+            l = self.loss(out, y)
 
         return out, l, y
 
@@ -136,11 +146,14 @@ class fcmab(object):
         head = self.head if head is None else head
         loss_list, acc_list, size = [], [], []
         labels, outputs = [], []
-        for i, data in enumerate(loader):
+        for _, data in enumerate(loader):
 
             out, l, y = self.model_loss(data)
 
-            _, predicted = torch.max(out.data, 1)
+            if self.model.classes == 1:
+                predicted = (out.data > 0.5).float()
+            else:
+                _, predicted = torch.max(out.data, 1)
 
             acc = torch.mean((predicted == y).float()).item() * 100
 
