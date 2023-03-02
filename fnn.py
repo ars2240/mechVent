@@ -59,7 +59,7 @@ class FLN(nn.Module):
             raise Exception('Invalid number of inputs.')
         # self.fc3 = nn.Linear(4, 5)
         self.fcf = nn.Linear(nc*classes, classes)
-        self.v = torch.zeros(nc, classes)  # fill-in
+        self.v = torch.zeros(nc, classes).requires_grad_()  # fill-in
         self.S = torch.zeros(nc)  # set of clients
 
     def forward(self, x):
@@ -114,7 +114,7 @@ class FLR(nn.Module):
                                                      nn.Linear(train_feat[3], classes)
         else:
             raise Exception('Invalid number of inputs.')
-        self.v = torch.zeros(nc, classes)  # fill-in
+        self.v = torch.zeros(nc, classes).requires_grad_()  # fill-in
         self.S = torch.zeros(nc)  # set of clients
 
     def forward(self, x):
@@ -180,7 +180,7 @@ class FLCNN(nn.Module):
         self.fl0 = MyDenseNet121(classCount=classes, isTrained=isTrained)
         self.fl1 = MyDenseNet121(classCount=classes, isTrained=isTrained)
         self.fcf = nn.Linear(nc*classes, classes)
-        self.v = torch.zeros(nc, classes)  # fill-in
+        self.v = torch.zeros(nc, classes).requires_grad_()  # fill-in
         self.S = torch.zeros(nc)  # set of clients
 
     def forward(self, x):

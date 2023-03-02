@@ -7,13 +7,14 @@ from sklearn.exceptions import ConvergenceWarning
 simplefilter("ignore", category=ConvergenceWarning)
 
 
-e0 = 14
-s1 = 10
+c0 = [range(0, 6), 9, range(14, 54)]
+c1 = [range(6, 9), range(10, 54)]
 epochs = 100
 inner = 10
 test_size, valid_size = 0.2, 0.2
 random_seed = 1226
 model = LogisticRegression(max_iter=inner)
+head = 'advLogReg'
 
 
 def alpha(k):
@@ -44,15 +45,15 @@ X = scaler.transform(X)
 X_valid = scaler.transform(X_valid)
 X_test = scaler.transform(X_test)
 
-X = np.concatenate((X[:, :e0], X[:, s1:]), axis=1)
-X_valid = np.concatenate((X_valid[:, :e0], X_valid[:, s1:]), axis=1)
-X_test = np.concatenate((X_test[:, :e0], X_test[:, s1:]), axis=1)
+X = np.concatenate((X[:, c0], X[:, c1]), axis=1)
+X_valid = np.concatenate((X_valid[:, c0], X_valid[:, c1]), axis=1)
+X_test = np.concatenate((X_test[:, c0], X_test[:, c1]), axis=1)
 
 
 def adversary(model, X):
     temp = 1 / (np.cosh(.5 * np.inner(X, model.coef_)) ** 2)
     grad = -.25 * np.dot(temp, model.coef_)
-    X[:, :e0] += alpha(j) * grad[:, :e0]
+    X[:, c0] += alpha(j) * grad[:, c0]
     return X
 
 
@@ -66,16 +67,16 @@ for i in range(epochs):
     loss.append(model.score(X_valid, y_valid))
 
 check_folder('./data')
-np.savetxt("./data/advLogReg.csv", X, delimiter=",")
-np.savetxt("./data/advLogReg_valid.csv", X_valid, delimiter=",")
-np.savetxt("./data/advLogReg_test.csv", X_test, delimiter=",")
-np.savetxt("./data/advLogReg_y.csv", y, delimiter=",")
-np.savetxt("./data/advLogReg_y_valid.csv", y_valid, delimiter=",")
-np.savetxt("./data/advLogReg_y_test.csv", y_test, delimiter=",")
+np.savetxt("./data/" + head + ".csv", X, delimiter=",")
+np.savetxt("./data/" + head + "_valid.csv", X_valid, delimiter=",")
+np.savetxt("./data/" + head + "_test.csv", X_test, delimiter=",")
+np.savetxt("./data/" + head + "_y.csv", y, delimiter=",")
+np.savetxt("./data/" + head + "_y_valid.csv", y_valid, delimiter=",")
+np.savetxt("./data/" + head + "_y_test.csv", y_test, delimiter=",")
 
 check_folder('./plots')
 plt.plot(loss)
 plt.title('Validation Accuracy')
-plt.savefig('./plots/advLogReg.png')
+plt.savefig('./plots/' + head + '.png')
 plt.clf()
 plt.close()
