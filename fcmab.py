@@ -13,7 +13,7 @@ def check_folder(path):
 
 class fcmab(object):
     def __init__(self, model, loss, opt, nc=2, n=10, epochs=10, c=.5, keep_best=True, head='', conf_matrix=False,
-                 adversarial=None):
+                 adversarial=None, plot=True):
 
         self.model = model  # model
         self.loss = loss  # loss
@@ -29,6 +29,7 @@ class fcmab(object):
         self.head = head  # file label
         self.conf_matrix = conf_matrix  # whether or not a confusion matrix is generated
         self.adversarial = adversarial  # which (if any) clients are adversarial
+        self.plot = plot  # if validation accuracy is plotted
 
     def train(self, train_loader, val_loader, test_loader):
         check_folder('./logs')
@@ -123,6 +124,14 @@ class fcmab(object):
         # close log
         log_file.close()  # close log file
         sys.stdout = old_stdout  # reset output
+
+        if self.plot:
+            check_folder('./plots')
+            plt.plot(val_acc_list)
+            plt.title('Validation Accuracy')
+            plt.savefig('./plots/' + self.head + '_valacc.png')
+            plt.clf()
+            plt.close()
 
     def model_loss(self, data):
         if self.nc == 2:

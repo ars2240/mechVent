@@ -202,6 +202,43 @@ def forest_loader(batch_size=1, test_size=0.2, random_seed=1226, valid_size=0.2,
     return train_loader, valid_loader, test_loader
 
 
+def adv_forest_loader(batch_size=1, num_workers=0, pin_memory=True):
+
+    check_folder('./data/')
+
+    # import data
+    X = np.genfromtxt('./data/advLogReg.csv', delimiter=',')
+    y = np.genfromtxt('./data/advLogReg_y.csv', delimiter=',')
+    X_valid = np.genfromtxt('./data/advLogReg_valid.csv', delimiter=',')
+    y_valid = np.genfromtxt('./data/advLogReg_y_valid.csv', delimiter=',')
+    X_test = np.genfromtxt('./data/advLogReg_test.csv', delimiter=',')
+    y_test = np.genfromtxt('./data/advLogReg_y_test.csv', delimiter=',')
+
+    # convert data-types
+    X = torch.from_numpy(X).float()
+    y = torch.from_numpy(y).long()
+    X_test = torch.from_numpy(X_test).float()
+    y_test = torch.from_numpy(y_test).long()
+    X_valid = torch.from_numpy(X_valid).float()
+    y_valid = torch.from_numpy(y_valid).long()
+
+    x1, x2 = X[:, :14], X[:, 14:]
+    train_data = utils_data.TensorDataset(x1, x2, y)
+    x1, x2 = X_valid[:, :14], X_valid[:, 14:]
+    valid_data = utils_data.TensorDataset(x1, x2, y_valid)
+    x1, x2 = X_test[:, :14], X_test[:, 14:]
+    test_data = utils_data.TensorDataset(x1, x2, y_test)
+
+    train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
+                                         pin_memory=pin_memory)
+    valid_loader = utils_data.DataLoader(valid_data, batch_size=batch_size, num_workers=num_workers,
+                                         pin_memory=pin_memory)
+    test_loader = utils_data.DataLoader(test_data, batch_size=batch_size, num_workers=num_workers,
+                                        pin_memory=pin_memory)
+
+    return train_loader, valid_loader, test_loader
+
+
 def taiwan_loader(batch_size=1, test_size=0.2, random_seed=1226, valid_size=0.2, num_workers=0, pin_memory=True,
                   u='taiwan.csv'):
     # import dataset
