@@ -1,9 +1,11 @@
 from itertools import cycle
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 from sklearn.metrics import confusion_matrix
 import sys
 import torch
+import torch.utils.data as utils_data
 
 
 def check_folder(path):
@@ -69,7 +71,8 @@ class fcmab(object):
             for epoch in range(self.epochs):
 
                 loss_list, size = [], []
-                for _, data in enumerate(train_loader):
+                nd = []
+                for j, data in enumerate(train_loader):
 
                     out, l, _ = self.model_loss(data)
 
@@ -80,10 +83,54 @@ class fcmab(object):
                     loss_list.append(l.item())
                     size.append(out.shape[0])
 
+                    if self.adversarial is not None and (
+                            (type(self.adversarial) == int and self.model.S[self.adversarial]) or (
+                            type(self.adversarial) == list and all(self.model.S[a] for a in self.adversarial))):
+
+                        _, l, _ = self.model_loss(data, adversarial=True)
+                        l.backward()
+
+                        if self.nc == 2:
+                            x0, x1, y = data
+                        elif self.nc == 4:
+                            x0, x1, x2, x3, y = data
+                        else:
+                            raise Exception("Number of clients not implemented.")
+
+                        if self.adversarial is None:
+                            raise Exception("No adversarial client selected.")
+                        if self.nc >= 1 and ((type(self.adversarial) == int and self.adversarial == 0) or
+                                             (type(self.adversarial) == list and 0 in self.adversarial)):
+                            x0.requires_grad = False
+                            x0 += x0.grad
+                        if self.nc >= 2 and ((type(self.adversarial) == int and self.adversarial == 1) or
+                                             (type(self.adversarial) == list and 1 in self.adversarial)):
+                            x1.requires_grad = False
+                            x1 += x1.grad
+                        if self.nc >= 3 and ((type(self.adversarial) == int and self.adversarial == 2) or
+                                             (type(self.adversarial) == list and 2 in self.adversarial)):
+                            x2.requires_grad = False
+                            x2 += x2.grad
+                        if self.nc >= 4 and ((type(self.adversarial) == int and self.adversarial == 3) or
+                                             (type(self.adversarial) == list and 3 in self.adversarial)):
+                            x3.requires_grad = False
+                            x3 += x3.grad
+
+                        if self.nc == 2:
+                            nd.append(utils_data.TensorDataset(x0, x1, y))
+                        elif self.nc == 4:
+                            nd.append(utils_data.TensorDataset(x0, x1, x2, x3, y))
+
                 # scheduler.step()
                 torch.save(self.model.state_dict(), './models/' + self.head + '.pt')
                 loss_avg = np.average(loss_list, weights=size)
                 print("%d\t%d\t%f" % (i, epoch, loss_avg))
+
+                if len(nd) > 0:
+                    nd = utils_data.ConcatDataset(nd)
+                    train_loader = utils_data.DataLoader(nd, batch_size=train_loader.batch_size,
+                                                         num_workers=train_loader.num_workers,
+                                                         pin_memory=train_loader.pin_memory)
 
             self.model.eval()
 
@@ -116,6 +163,7 @@ class fcmab(object):
         log_file = open('./logs/' + self.head + '.log', 'a')  # open log file
         sys.stdout = log_file  # write to log file
 
+        print(self.model.S)
         print('Train\tAcc\tTest\tAcc')
         train_loss, train_acc = self.loss_acc(train_loader, head=self.head + '_train')
         test_loss, test_acc = self.loss_acc(test_loader, head=self.head + '_test')
@@ -133,7 +181,7 @@ class fcmab(object):
             plt.clf()
             plt.close()
 
-    def model_loss(self, data):
+    def model_loss(self, data, adversarial=False):
         if self.nc == 2:
             x0, x1, y = data
             x = x0, x1
@@ -142,6 +190,21 @@ class fcmab(object):
             x = x0, x1, x2, x3
         else:
             raise Exception("Number of clients not implemented.")
+
+        if adversarial and self.adversarial is None:
+            raise Exception("No adversarial client selected.")
+        if adversarial and self.nc >= 1 and ((type(self.adversarial) == int and self.adversarial == 0) or
+                                             (type(self.adversarial) == list and 0 in self.adversarial)):
+            x0.requires_grad_()
+        if adversarial and self.nc >= 2 and ((type(self.adversarial) == int and self.adversarial == 1) or
+                                             (type(self.adversarial) == list and 1 in self.adversarial)):
+            x1.requires_grad_()
+        if adversarial and self.nc >= 3 and ((type(self.adversarial) == int and self.adversarial == 2) or
+                                             (type(self.adversarial) == list and 2 in self.adversarial)):
+            x2.requires_grad_()
+        if adversarial and self.nc >= 4 and ((type(self.adversarial) == int and self.adversarial == 3) or
+                                             (type(self.adversarial) == list and 3 in self.adversarial)):
+            x3.requires_grad_()
 
         out = self.model(x)
         if self.model.classes == 1:

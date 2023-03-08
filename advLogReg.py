@@ -7,14 +7,16 @@ from sklearn.exceptions import ConvergenceWarning
 simplefilter("ignore", category=ConvergenceWarning)
 
 
-c0 = [range(0, 6), 9, range(14, 54)]
-c1 = [range(6, 9), range(10, 54)]
+c0 = [*range(0, 6), 9, *range(14, 54)]
+print(len(c0))
+c1 = [*range(6, 9), *range(10, 54)]
+print(len(c1))
 epochs = 100
 inner = 10
 test_size, valid_size = 0.2, 0.2
 random_seed = 1226
 model = LogisticRegression(max_iter=inner)
-head = 'advLogReg'
+head = 'advLogReg2'
 
 
 def alpha(k):
@@ -50,10 +52,10 @@ X_valid = np.concatenate((X_valid[:, c0], X_valid[:, c1]), axis=1)
 X_test = np.concatenate((X_test[:, c0], X_test[:, c1]), axis=1)
 
 
-def adversary(model, X):
+def adversary(model, X, j):
     temp = 1 / (np.cosh(.5 * np.inner(X, model.coef_)) ** 2)
     grad = -.25 * np.dot(temp, model.coef_)
-    X[:, c0] += alpha(j) * grad[:, c0]
+    X[:, :len(c0)] += alpha(j) * grad[:, :len(c0)]
     return X
 
 
@@ -61,9 +63,9 @@ loss = []
 for i in range(epochs):
     model.fit(X, y)
     for j in range(inner):
-        X = adversary(model, X)
-        X_valid = adversary(model, X_valid)
-        X_test = adversary(model, X_test)
+        X = adversary(model, X, j)
+        X_valid = adversary(model, X_valid, j)
+        X_test = adversary(model, X_test, j)
     loss.append(model.score(X_valid, y_valid))
 
 check_folder('./data')
