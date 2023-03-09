@@ -104,19 +104,19 @@ class fcmab(object):
                         if self.nc >= 1 and ((type(self.adversarial) == int and self.adversarial == 0) or
                                              (type(self.adversarial) == list and 0 in self.adversarial)):
                             x0.requires_grad = False
-                            x0 += self.alpha * x0.grad
+                            x0 += self.step * x0.grad
                         if self.nc >= 2 and ((type(self.adversarial) == int and self.adversarial == 1) or
                                              (type(self.adversarial) == list and 1 in self.adversarial)):
                             x1.requires_grad = False
-                            x1 += self.alpha * x1.grad
+                            x1 += self.step * x1.grad
                         if self.nc >= 3 and ((type(self.adversarial) == int and self.adversarial == 2) or
                                              (type(self.adversarial) == list and 2 in self.adversarial)):
                             x2.requires_grad = False
-                            x2 += self.alpha * x2.grad
+                            x2 += self.step * x2.grad
                         if self.nc >= 4 and ((type(self.adversarial) == int and self.adversarial == 3) or
                                              (type(self.adversarial) == list and 3 in self.adversarial)):
                             x3.requires_grad = False
-                            x3 += self.alpha * x3.grad
+                            x3 += self.step * x3.grad
 
                         if self.nc == 2:
                             nd.append(utils_data.TensorDataset(x0, x1, y))
