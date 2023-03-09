@@ -15,7 +15,7 @@ def check_folder(path):
 
 class fcmab(object):
     def __init__(self, model, loss, opt, nc=2, n=10, epochs=10, c=.5, keep_best=True, head='', conf_matrix=False,
-                 adversarial=None, alpha=1, plot=True):
+                 adversarial=None, step=1, plot=True):
 
         self.model = model  # model
         self.loss = loss  # loss
@@ -31,7 +31,7 @@ class fcmab(object):
         self.head = head  # file label
         self.conf_matrix = conf_matrix  # whether or not a confusion matrix is generated
         self.adversarial = adversarial  # which (if any) clients are adversarial
-        self.alpha = alpha  # step size of adversary
+        self.step = step  # step size of adversary
         self.plot = plot  # if validation accuracy is plotted
 
     def train(self, train_loader, val_loader, test_loader):
@@ -104,19 +104,19 @@ class fcmab(object):
                         if self.nc >= 1 and ((type(self.adversarial) == int and self.adversarial == 0) or
                                              (type(self.adversarial) == list and 0 in self.adversarial)):
                             x0.requires_grad = False
-                            x0 += self.alpha*x0.grad
+                            x0 += self.alpha * x0.grad
                         if self.nc >= 2 and ((type(self.adversarial) == int and self.adversarial == 1) or
                                              (type(self.adversarial) == list and 1 in self.adversarial)):
                             x1.requires_grad = False
-                            x1 += self.alpha*x1.grad
+                            x1 += self.alpha * x1.grad
                         if self.nc >= 3 and ((type(self.adversarial) == int and self.adversarial == 2) or
                                              (type(self.adversarial) == list and 2 in self.adversarial)):
                             x2.requires_grad = False
-                            x2 += self.alpha*x2.grad
+                            x2 += self.alpha * x2.grad
                         if self.nc >= 4 and ((type(self.adversarial) == int and self.adversarial == 3) or
                                              (type(self.adversarial) == list and 3 in self.adversarial)):
                             x3.requires_grad = False
-                            x3 += self.alpha*x3.grad
+                            x3 += self.alpha * x3.grad
 
                         if self.nc == 2:
                             nd.append(utils_data.TensorDataset(x0, x1, y))
