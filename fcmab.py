@@ -143,21 +143,14 @@ class fcmab(object):
         if self.plot:
             check_folder('./plots')
 
-            # training plot
-            plt.plot(tr_acc_list)
-            plt.title('Training Accuracy')
+            # accuracy plot
+            plt.plot(tr_acc_list, label='Training')
+            plt.plot(val_acc_list, label='Validation')
+            plt.title('Accuracy')
             plt.xlabel("Iterations")
             plt.ylabel("Accuracy")
-            plt.savefig('./plots/' + self.head + '_tracc.png')
-            plt.clf()
-            plt.close()
-
-            # validation plot
-            plt.plot(val_acc_list)
-            plt.title('Validation Accuracy')
-            plt.xlabel("Iterations")
-            plt.ylabel("Accuracy")
-            plt.savefig('./plots/' + self.head + '_valacc.png')
+            plt.legend()
+            plt.savefig('./plots/' + self.head + '_acc.png')
             plt.clf()
             plt.close()
 
@@ -174,13 +167,16 @@ class fcmab(object):
             plt.close()
 
             # subset plot
-            s_list = -np.transpose(np.array(s_list))
+            s_list = -np.transpose(np.array(s_list).astype('int'))
             fig = plt.figure()
             ax = fig.add_subplot(111)
             ax.imshow(s_list, aspect='auto', cmap=plt.cm.gray, interpolation='nearest')
             plt.title('Clients')
             plt.xlabel("Iterations")
             plt.ylabel("Client")
+            ticks = np.arange(s_list.shape[0])
+            ax.set_yticks(ticks)
+            ax.set_yticklabels(ticks)
             plt.savefig('./plots/' + self.head + '_clients.png')
             plt.clf()
             plt.close()
