@@ -90,7 +90,7 @@ class fcmab(object):
                 val_loader = self.adversary(val_loader)
 
                 # scheduler.step()
-                torch.save(self.model.state_dict(), './models/' + self.head + '.pt')
+                self.save()
                 loss_avg = np.average(loss_list, weights=size)
                 print("%d\t%d\t%f" % (i, epoch, loss_avg))
 
@@ -108,7 +108,7 @@ class fcmab(object):
             print("current: %f, best: %f" % (val_acc, best_acc))
             if self.keep_best and val_acc > best_acc:
                 best_acc = val_acc
-                torch.save(self.model.state_dict(), './models/' + self.head + '_best.pt')
+                self.save(head=self.head + '_best')
                 print('new high!')
 
             # adjust priors
@@ -123,7 +123,7 @@ class fcmab(object):
             sys.stdout = old_stdout  # reset output
 
         if self.keep_best:
-            self.model.load_state_dict(torch.load('./models/' + self.head + '_best.pt'))
+            self.load(head=self.head + '_best')
 
         # open log
         old_stdout = sys.stdout  # save old output
@@ -246,6 +246,7 @@ class fcmab(object):
         if self.adversarial is not None and ((type(self.adversarial) == int and self.model.S[self.adversarial]) or (
                 type(self.adversarial) == list and all(self.model.S[a] for a in self.adversarial))):
 
+            nd = []
             for _, data in enumerate(loader):
 
                 _, l, _ = self.model_loss(data, adversarial=True)
@@ -287,3 +288,15 @@ class fcmab(object):
                                            pin_memory=loader.pin_memory)
 
         return loader
+
+    def save(self, head=None):
+        head = self.head if head is None else head
+        torch.save({'model_state_dict': self.model.state_dict(), 'S': self.model.S, 'v': self.model.v},
+                   './models/' + head + '.pt')
+
+    def load(self, head=None):
+        head = self.head if head is None else head
+        model = torch.load('./models/' + head + '.pt')
+        self.model.load_state_dict(model['model_state_dict'])
+        self.model.S = model['S']
+        self.model.v = model['v']
