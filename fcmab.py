@@ -15,7 +15,7 @@ def check_folder(path):
 
 class fcmab(object):
     def __init__(self, model, loss, opt, nc=2, n=10, epochs=10, c=.5, keep_best=True, head='', conf_matrix=False,
-                 adversarial=None, step=1, plot=True):
+                 adversarial=None, step=1, plot=True, m=0, ab=0, ucb_c=1):
 
         self.model = model  # model
         self.loss = loss  # loss
@@ -26,6 +26,8 @@ class fcmab(object):
         self.alpha = np.ones(nc)  # beta distribution prior
         self.beta = np.ones(nc)  # beta distribution prior
         self.theta = np.zeros(nc)  # random variable
+        self.ucb_n = np.zeros(nc)  # count for UCB
+        self.ucb_c = ucb_c  # confidence in UCB
         self.c = c  # cutoff
         self.keep_best = keep_best  # whether or not best model is kept
         self.head = head  # file label
@@ -33,6 +35,8 @@ class fcmab(object):
         self.adversarial = adversarial  # which (if any) clients are adversarial
         self.step = step  # step size of adversary
         self.plot = plot  # if validation accuracy is plotted
+        self.m = m  # type of reward function
+        self.ab = ab  # type of alpha/beta update
 
     def train(self, train_loader, val_loader, test_loader):
         check_folder('./logs')
@@ -47,7 +51,12 @@ class fcmab(object):
 
         best_acc = 0
         map = 0.5
-        tr_acc_list, val_acc_list, map_list, s_list = [], [], [], []
+        tr_acc_list, val_acc_list, map_list, s_list, theta_list = [], [], [], [], []
+        if 'mab' in self.c.lower():
+            ucb_list = []
+        if self.c.lower() == 'mablin':
+            A = [np.identity(self.nc) for _ in range(self.nc)]
+            b = [np.zeros(self.nc) for _ in range(self.nc)]
         for i in range(self.n):
 
             # open log
@@ -57,13 +66,36 @@ class fcmab(object):
 
             # pull clients
             self.theta = np.random.beta(self.alpha, self.beta)
+            theta_list.append(self.theta)
             print(self.theta)
             if type(self.c) == int or type(self.c) == float:
                 self.model.S = self.theta > self.c
+                c = self.c
             elif self.c.lower() == 'mean':
                 self.model.S = self.theta > np.mean(map)
+                c = np.mean(map)
+            elif 'mab' in self.c.lower():
+                ind = np.argsort(-self.theta)
+                th = self.theta[ind]
+                if self.c.lower() == 'mablin':
+                    Ai = [np.linalg.inv(A[j]) for j in range(self.nc)]
+                    th_hat = [np.matmul(Ai[j], b[j]) for j in range(self.nc)]
+                    ucb = [np.dot(th_hat[j], self.theta) + self.ucb_c * np.sqrt(
+                        np.dot(np.dot(self.theta, Ai[j]), self.theta)) for j in range(self.nc)]
+                else:
+                    thm = np.cumsum(th) / np.arange(1, self.nc + 1)
+                    ucb = thm + self.ucb_c * np.sqrt(np.log(i) / self.ucb_n) if i > 0 else thm
+                    ucb[self.ucb_n == 0] = 1
+                k = np.argmax(ucb)
+                self.model.S = np.array([False] * self.nc)
+                self.model.S[ind[:(k+1)]] = True
+                ucb_list.append(ucb)
+                self.ucb_n[k] += 1
+                c = th[k]
             else:
                 raise Exception('Cutoff not implemented.')
+
+            # non-empty S
             if not any(self.model.S):
                 self.model.S = self.theta == np.max(self.theta)
             print(self.model.S)
@@ -111,12 +143,32 @@ class fcmab(object):
                 self.save(head=self.head + '_best')
                 print('new high!')
 
+            # compute rewards
+            if self.m == 0:
+                m = val_acc/100
+            elif self.m == 1:
+                m = val_acc / 100 - c + .5
+            else:
+                raise Exception('m not implemented.')
+
             # adjust priors
-            self.alpha += val_acc/100 * self.model.S
-            self.beta += (1-val_acc/100) * self.model.S
+            if self.ab == 0:
+                self.alpha += m * self.model.S
+                self.beta += (1-m) * self.model.S
+            elif self.ab == 1:
+                self.alpha += m * self.model.S + (1-m) * np.invert(self.model.S)
+                self.beta += (1 - m) * self.model.S + m * np.invert(self.model.S)
+            else:
+                raise Exception('ab not implemented.')
+
+            # compute MAP
             map = self.alpha/(self.alpha + self.beta)
             map_list.append(map)
             print(map)
+
+            if self.c.lower() == 'mablin':
+                A[k] += np.outer(self.theta, self.theta)
+                b[k] += m * self.theta
 
             # close log
             log_file.close()  # close log file
@@ -166,6 +218,18 @@ class fcmab(object):
             plt.clf()
             plt.close()
 
+            # Theta plot
+            theta_list = np.array(theta_list)
+            for i in range(theta_list.shape[1]):
+                plt.plot(theta_list[:, i], label=str(i))
+            plt.title(r"$\theta$")
+            plt.xlabel("Iterations")
+            plt.ylabel(r"$\theta$")
+            plt.legend()
+            plt.savefig('./plots/' + self.head + '_theta.png')
+            plt.clf()
+            plt.close()
+
             # subset plot
             s_list = -np.transpose(np.array(s_list).astype('int'))
             fig = plt.figure()
@@ -180,6 +244,19 @@ class fcmab(object):
             plt.savefig('./plots/' + self.head + '_clients.png')
             plt.clf()
             plt.close()
+
+            if 'mab' in self.c.lower():
+                # UCB plot
+                ucb_list = np.array(ucb_list)
+                for i in range(ucb_list.shape[1]):
+                    plt.plot(ucb_list[:, i], label=str(i+1))
+                plt.title("UCB")
+                plt.xlabel("Iterations")
+                plt.ylabel("UCB")
+                plt.legend()
+                plt.savefig('./plots/' + self.head + '_ucb.png')
+                plt.clf()
+                plt.close()
 
     def model_loss(self, data, adversarial=False):
         if self.nc == 2:
