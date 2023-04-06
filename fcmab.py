@@ -13,9 +13,24 @@ def check_folder(path):
         os.mkdir(path)
 
 
+def matprod3(A, b):
+    return np.matmul(np.matmul(np.transpose(b), A), b)
+
+
+def dot(a, b):
+    if a.ndim == 1:
+        return np.dot(a, b)
+    elif a.ndim == 2 and np.shape(a)[1] == 1:
+        return np.matmul(np.transpose(a), b)
+    elif a.ndim == 2 and np.shape(a)[0] == 1:
+        return np.matmul(a, b)
+    else:
+        raise Exception('Bad dot product.')
+
+
 class fcmab(object):
     def __init__(self, model, loss, opt, nc=2, n=10, epochs=10, c=.5, keep_best=True, head='', conf_matrix=False,
-                 adversarial=None, step=1, plot=True, m=0, ab=0, ucb_c=1):
+                 adversarial=None, step=1, plot=True, m=0, ab=0, ucb_c=1, verbose=False):
 
         self.model = model  # model
         self.loss = loss  # loss
@@ -37,6 +52,7 @@ class fcmab(object):
         self.plot = plot  # if validation accuracy is plotted
         self.m = m  # type of reward function
         self.ab = ab  # type of alpha/beta update
+        self.verbose = verbose  # if extra print statements are used
 
     def train(self, train_loader, val_loader, test_loader):
         check_folder('./logs')
@@ -55,8 +71,16 @@ class fcmab(object):
         if 'mab' in self.c.lower():
             ucb_list = []
         if self.c.lower() == 'mablin':
-            A = [np.identity(self.nc) for _ in range(self.nc)]
-            b = [np.zeros(self.nc) for _ in range(self.nc)]
+            x0 = np.random.normal(size=(self.nc, 1))
+            A = [np.identity(self.nc + 1) for _ in range(self.nc)]
+            b = [np.zeros((self.nc + 1, 1)) for _ in range(self.nc)]
+        elif self.c.lower() == 'mablinhyb':
+            x0 = np.random.normal(size=(self.nc, 1))
+            A0 = np.identity(self.nc)
+            b0 = np.zeros((self.nc, 1))
+            A = [np.identity(1) for _ in range(self.nc)]
+            B = [np.zeros((1, self.nc)) for _ in range(self.nc)]
+            b = [np.zeros((1, 1)) for _ in range(self.nc)]
         for i in range(self.n):
 
             # open log
@@ -67,7 +91,8 @@ class fcmab(object):
             # pull clients
             self.theta = np.random.beta(self.alpha, self.beta)
             theta_list.append(self.theta)
-            print(self.theta)
+            if self.verbose:
+                print(self.theta)
             if type(self.c) == int or type(self.c) == float:
                 self.model.S = self.theta > self.c
                 c = self.c
@@ -78,10 +103,43 @@ class fcmab(object):
                 ind = np.argsort(-self.theta)
                 th = self.theta[ind]
                 if self.c.lower() == 'mablin':
+                    x = [np.expand_dims(np.concatenate((self.theta, x0[j]), axis=None), axis=1) for j in range(self.nc)]
                     Ai = [np.linalg.inv(A[j]) for j in range(self.nc)]
                     th_hat = [np.matmul(Ai[j], b[j]) for j in range(self.nc)]
-                    ucb = [np.dot(th_hat[j], self.theta) + self.ucb_c * np.sqrt(
-                        np.dot(np.dot(self.theta, Ai[j]), self.theta)) for j in range(self.nc)]
+                    s = [matprod3(Ai[j], x[j]) for j in range(self.nc)]
+                    ucb = [(dot(th_hat[j], x[j]) + self.ucb_c * np.sqrt(s[j])).item() for j in range(self.nc)]
+                    if self.verbose:
+                        print('A: {0}'.format(A))
+                        print('b: {0}'.format(b))
+                        print('x: {0}'.format(x))
+                        print('Ai: {0}'.format(Ai))
+                        print('th_hat: {0}'.format(th_hat))
+                        print('s: {0}'.format(s))
+                        print('ucb: {0}'.format(ucb))
+                elif self.c.lower() == 'mablinhyb':
+                    A0i = np.linalg.inv(A0)
+                    b_hat = np.matmul(A0i, b0)
+                    Ai = [np.linalg.inv(A[j]) for j in range(self.nc)]
+                    th_hat = [np.matmul(Ai[j], b[j]-np.matmul(B[j], b_hat)) for j in range(self.nc)]
+                    t0 = np.matmul(np.transpose(self.theta), A0i)
+                    t1 = [np.matmul(np.matmul(np.matmul(t0, np.transpose(B[j])), Ai[j]), x0[j]) for j in range(self.nc)]
+                    t2 = [matprod3(np.matmul(np.matmul(Ai[j], matprod3(A0i, np.transpose(B[j]))), Ai[j]), x0[j]) for j
+                          in range(self.nc)]
+                    s = [matprod3(A0i, self.theta) - 2 * t1[j] + matprod3(Ai[j], x0[j]) + t2[j] for j in range(self.nc)]
+                    ucb = [(dot(self.theta, b_hat) + dot(th_hat[j], x0[j]) + self.ucb_c * np.sqrt(s[j])).item()
+                           for j in range(self.nc)]
+                    if self.verbose:
+                        print('A: {0}'.format(A))
+                        print('B: {0}'.format(B))
+                        print('b: {0}'.format(b))
+                        print('A0: {0}'.format(A0))
+                        print('b0: {0}'.format(b0))
+                        print('A0i: {0}'.format(A0i))
+                        print('Ai: {0}'.format(Ai))
+                        print('b_hat: {0}'.format(b_hat))
+                        print('th_hat: {0}'.format(th_hat))
+                        print('s: {0}'.format(s))
+                        print('ucb: {0}'.format(ucb))
                 else:
                     thm = np.cumsum(th) / np.arange(1, self.nc + 1)
                     ucb = thm + self.ucb_c * np.sqrt(np.log(i) / self.ucb_n) if i > 0 else thm
@@ -98,11 +156,13 @@ class fcmab(object):
             # non-empty S
             if not any(self.model.S):
                 self.model.S = self.theta == np.max(self.theta)
-            print(self.model.S)
+            if self.verbose:
+                print(self.model.S)
             s_list.append(self.model.S)
 
             # adjust weights
-            print('Iter\tEpoch\tLoss')
+            if self.verbose:
+                print('Iter\tEpoch\tLoss')
             self.model.train()
             for epoch in range(self.epochs):
 
@@ -124,7 +184,8 @@ class fcmab(object):
                 # scheduler.step()
                 self.save()
                 loss_avg = np.average(loss_list, weights=size)
-                print("%d\t%d\t%f" % (i, epoch, loss_avg))
+                if self.verbose:
+                    print("%d\t%d\t%f" % (i, epoch, loss_avg))
 
             self.model.eval()
 
@@ -164,11 +225,22 @@ class fcmab(object):
             # compute MAP
             map = self.alpha/(self.alpha + self.beta)
             map_list.append(map)
-            print(map)
+            if self.verbose:
+                print(map)
 
             if self.c.lower() == 'mablin':
-                A[k] += np.outer(self.theta, self.theta)
-                b[k] += m * self.theta
+                A[k] += np.outer(x[k], x[k])
+                b[k] += m * x[k]
+            elif self.c.lower() == 'mablinhyb':
+                t = np.matmul(np.transpose(B[k]), Ai[k])
+                A0 += np.matmul(t, B[k])
+                b0 += np.matmul(t, b[k])
+                A[k] += np.outer(x0[k], x0[k])
+                B[k] += np.outer(x0[k], self.theta)
+                b[k] += m * x0[k]
+                t = np.matmul(np.transpose(B[k]), np.linalg.inv(A[k]))
+                A0 += np.outer(self.theta, self.theta) - np.matmul(t, B[k])
+                b0 += m * np.expand_dims(self.theta, axis=1) - np.matmul(t, b[k])
 
             # close log
             log_file.close()  # close log file
@@ -182,7 +254,8 @@ class fcmab(object):
         log_file = open('./logs/' + self.head + '.log', 'a')  # open log file
         sys.stdout = log_file  # write to log file
 
-        print(self.model.S)
+        if self.verbose:
+            print(self.model.S)
         print('Train\tAcc\tTest\tAcc')
         train_loss, train_acc = self.loss_acc(train_loader, head=self.head + '_train')
         test_loss, test_acc = self.loss_acc(test_loader, head=self.head + '_test')
