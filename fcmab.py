@@ -30,7 +30,7 @@ def dot(a, b):
 
 class fcmab(object):
     def __init__(self, model, loss, opt, nc=2, n=10, epochs=10, c=.5, keep_best=True, head='', conf_matrix=False,
-                 adversarial=None, step=1, plot=True, m=0, ab=0, ucb_c=1, verbose=False):
+                 adversarial=None, step=1, plot=True, m=0, ab=0, ucb_c=1, xdim=1, verbose=False):
 
         self.model = model  # model
         self.loss = loss  # loss
@@ -43,6 +43,7 @@ class fcmab(object):
         self.theta = np.zeros(nc)  # random variable
         self.ucb_n = np.zeros(nc)  # count for UCB
         self.ucb_c = ucb_c  # confidence in UCB
+        self.xdim = xdim  # dimensions of ucb x
         self.c = c  # cutoff
         self.keep_best = keep_best  # whether or not best model is kept
         self.head = head  # file label
@@ -69,18 +70,18 @@ class fcmab(object):
         map = 0.5
         tr_acc_list, val_acc_list, map_list, s_list, theta_list = [], [], [], [], []
         if 'mab' in self.c.lower():
-            ucb_list = []
+            ucb_list, ucb_mean, ucb_std = [], [], []
         if self.c.lower() == 'mablin':
-            x0 = np.random.normal(size=(self.nc, 1))
-            A = [np.identity(self.nc + 1) for _ in range(self.nc)]
-            b = [np.zeros((self.nc + 1, 1)) for _ in range(self.nc)]
+            x0 = np.random.normal(size=(self.nc, self.xdim))
+            A = [np.identity(self.nc + self.xdim) for _ in range(self.nc)]
+            b = [np.zeros((self.nc + self.xdim, 1)) for _ in range(self.nc)]
         elif self.c.lower() == 'mablinhyb':
-            x0 = np.random.normal(size=(self.nc, 1))
+            x0 = np.random.normal(size=(self.nc, self.xdim))
             A0 = np.identity(self.nc)
             b0 = np.zeros((self.nc, 1))
-            A = [np.identity(1) for _ in range(self.nc)]
-            B = [np.zeros((1, self.nc)) for _ in range(self.nc)]
-            b = [np.zeros((1, 1)) for _ in range(self.nc)]
+            A = [np.identity(self.xdim) for _ in range(self.nc)]
+            B = [np.zeros((self.xdim, self.nc)) for _ in range(self.nc)]
+            b = [np.zeros((self.xdim, 1)) for _ in range(self.nc)]
         for i in range(self.n):
 
             # open log
@@ -107,7 +108,9 @@ class fcmab(object):
                     Ai = [np.linalg.inv(A[j]) for j in range(self.nc)]
                     th_hat = [np.matmul(Ai[j], b[j]) for j in range(self.nc)]
                     s = [matprod3(Ai[j], x[j]) for j in range(self.nc)]
-                    ucb = [(dot(th_hat[j], x[j]) + self.ucb_c * np.sqrt(s[j])).item() for j in range(self.nc)]
+                    ucb_m = [(dot(th_hat[j], x[j])).item() for j in range(self.nc)]
+                    ucb_s = [np.sqrt(s[j]).item() for j in range(self.nc)]
+                    ucb = [ucb_m[j] + self.ucb_c * ucb_s[j] for j in range(self.nc)]
                     if self.verbose:
                         print('A: {0}'.format(A))
                         print('b: {0}'.format(b))
@@ -126,8 +129,9 @@ class fcmab(object):
                     t2 = [matprod3(np.matmul(np.matmul(Ai[j], matprod3(A0i, np.transpose(B[j]))), Ai[j]), x0[j]) for j
                           in range(self.nc)]
                     s = [matprod3(A0i, self.theta) - 2 * t1[j] + matprod3(Ai[j], x0[j]) + t2[j] for j in range(self.nc)]
-                    ucb = [(dot(self.theta, b_hat) + dot(th_hat[j], x0[j]) + self.ucb_c * np.sqrt(s[j])).item()
-                           for j in range(self.nc)]
+                    ucb_m = [(dot(self.theta, b_hat) + dot(th_hat[j], x0[j])).item() for j in range(self.nc)]
+                    ucb_s = [np.sqrt(s[j]).item() for j in range(self.nc)]
+                    ucb = [ucb_m[j] + self.ucb_c * ucb_s[j] for j in range(self.nc)]
                     if self.verbose:
                         print('A: {0}'.format(A))
                         print('B: {0}'.format(B))
@@ -141,13 +145,16 @@ class fcmab(object):
                         print('s: {0}'.format(s))
                         print('ucb: {0}'.format(ucb))
                 else:
-                    thm = np.cumsum(th) / np.arange(1, self.nc + 1)
-                    ucb = thm + self.ucb_c * np.sqrt(np.log(i) / self.ucb_n) if i > 0 else thm
+                    ucb_m = np.cumsum(th) / np.arange(1, self.nc + 1)
+                    ucb_s = np.sqrt(np.log(i) / self.ucb_n)
+                    ucb = ucb_m + self.ucb_c * ucb_s if i > 0 else ucb_m
                     ucb[self.ucb_n == 0] = 1
                 k = np.argmax(ucb)
                 self.model.S = np.array([False] * self.nc)
                 self.model.S[ind[:(k+1)]] = True
                 ucb_list.append(ucb)
+                ucb_mean.append(ucb_m)
+                ucb_std.append(ucb_s)
                 self.ucb_n[k] += 1
                 c = th[k]
             else:
@@ -319,15 +326,37 @@ class fcmab(object):
             plt.close()
 
             if 'mab' in self.c.lower():
-                # UCB plot
+                # UCB plots
                 ucb_list = np.array(ucb_list)
                 for i in range(ucb_list.shape[1]):
                     plt.plot(ucb_list[:, i], label=str(i+1))
-                plt.title("UCB")
+                plt.title("Acquisition Cost")
                 plt.xlabel("Iterations")
-                plt.ylabel("UCB")
+                plt.ylabel("Acquisition Cost")
                 plt.legend()
                 plt.savefig('./plots/' + self.head + '_ucb.png')
+                plt.clf()
+                plt.close()
+
+                ucb_mean = np.array(ucb_mean)
+                for i in range(ucb_mean.shape[1]):
+                    plt.plot(ucb_mean[:, i], label=str(i + 1))
+                plt.title("Acquisition Cost Mean")
+                plt.xlabel("Iterations")
+                plt.ylabel("Acquisition Cost")
+                plt.legend()
+                plt.savefig('./plots/' + self.head + '_ucb_mean.png')
+                plt.clf()
+                plt.close()
+
+                ucb_std = np.array(ucb_std)
+                for i in range(ucb_std.shape[1]):
+                    plt.plot(ucb_std[:, i], label=str(i + 1))
+                plt.title("Acquisition Cost Standard Deviation")
+                plt.xlabel("Iterations")
+                plt.ylabel("Acquisition Cost")
+                plt.legend()
+                plt.savefig('./plots/' + self.head + '_ucb_std.png')
                 plt.clf()
                 plt.close()
 
