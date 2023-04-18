@@ -173,27 +173,34 @@ class fcmab(object):
                 print('Iter\tEpoch\tLoss')
             self.model.train()
             for epoch in range(self.epochs):
-
-                loss_list, size = [], []
                 for _, data in enumerate(train_loader):
 
-                    out, l, _ = self.model_loss(data)
+                    _, l, _ = self.model_loss(data)
 
                     self.opt.zero_grad()
                     l.backward()
                     self.opt.step()
 
-                    loss_list.append(l.item())
-                    size.append(out.shape[0])
+                if self.verbose:
+                    tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
+                    print("%d\t%d\t%f" % (i, epoch, tr_loss))
 
-                train_loader = self.adversary(train_loader)
-                val_loader = self.adversary(val_loader)
+                if self.adv_epoch > 1:
+                    for ep in range(self.adv_epoch):
+                        train_loader = self.adversary(train_loader, ep)
+                        val_loader = self.adversary(val_loader, ep)
+                        if self.verbose:
+                            tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
+                            print("%s\t%d\t%f" % ('A{0}'.format(ep), epoch, tr_loss))
+                else:
+                    train_loader = self.adversary(train_loader, epoch)
+                    val_loader = self.adversary(val_loader, epoch)
+                    if self.verbose:
+                        tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
+                        print("%s\t%d\t%f" % ('Adv', epoch, tr_loss))
 
                 # scheduler.step()
                 self.save()
-                loss_avg = np.average(loss_list, weights=size)
-                if self.verbose:
-                    print("%d\t%d\t%f" % (i, epoch, loss_avg))
 
             self.model.eval()
 
@@ -422,64 +429,55 @@ class fcmab(object):
 
         return np.average(loss_list, weights=size), np.average(acc_list, weights=size)
 
-    def adversary(self, loader):
+    def adversary(self, loader, epoch=None):
         if self.adversarial is not None and ((type(self.adversarial) == int and self.model.S[self.adversarial]) or (
                 type(self.adversarial) == list and all(self.model.S[a] for a in self.adversarial))):
 
-            if self.verbose:
-                print('Iter\tEpoch\tLoss')
+            if epoch is None:
+                epoch = 0
+            step = self.step(epoch) if callable(self.step) else self.step
 
-            for epoch in range(self.adv_epoch):
-                step = self.step(epoch) if callable(self.step) else self.step
+            nd = []
+            for _, data in enumerate(loader):
 
-                nd, loss_list, size = [], [], []
-                for _, data in enumerate(loader):
+                _, l, _ = self.model_loss(data, adversarial=True)
+                self.opt.zero_grad()
+                l.backward()
 
-                    _, l, _ = self.model_loss(data, adversarial=True)
-                    self.opt.zero_grad()
-                    l.backward()
+                if self.nc == 2:
+                    x0, x1, y = data
+                elif self.nc == 4:
+                    x0, x1, x2, x3, y = data
+                else:
+                    raise Exception("Number of clients not implemented.")
 
-                    if self.nc == 2:
-                        x0, x1, y = data
-                    elif self.nc == 4:
-                        x0, x1, x2, x3, y = data
-                    else:
-                        raise Exception("Number of clients not implemented.")
+                if self.adversarial is None:
+                    raise Exception("No adversarial client selected.")
+                if self.nc >= 1 and ((type(self.adversarial) == int and self.adversarial == 0) or
+                                     (type(self.adversarial) == list and 0 in self.adversarial)):
+                    x0.requires_grad = False
+                    x0 += step * x0.grad
+                if self.nc >= 2 and ((type(self.adversarial) == int and self.adversarial == 1) or
+                                     (type(self.adversarial) == list and 1 in self.adversarial)):
+                    x1.requires_grad = False
+                    x1 += step * x1.grad
+                if self.nc >= 3 and ((type(self.adversarial) == int and self.adversarial == 2) or
+                                     (type(self.adversarial) == list and 2 in self.adversarial)):
+                    x2.requires_grad = False
+                    x2 += step * x2.grad
+                if self.nc >= 4 and ((type(self.adversarial) == int and self.adversarial == 3) or
+                                     (type(self.adversarial) == list and 3 in self.adversarial)):
+                    x3.requires_grad = False
+                    x3 += sstep * x3.grad
 
-                    if self.adversarial is None:
-                        raise Exception("No adversarial client selected.")
-                    if self.nc >= 1 and ((type(self.adversarial) == int and self.adversarial == 0) or
-                                         (type(self.adversarial) == list and 0 in self.adversarial)):
-                        x0.requires_grad = False
-                        x0 += step * x0.grad
-                    if self.nc >= 2 and ((type(self.adversarial) == int and self.adversarial == 1) or
-                                         (type(self.adversarial) == list and 1 in self.adversarial)):
-                        x1.requires_grad = False
-                        x1 += step * x1.grad
-                    if self.nc >= 3 and ((type(self.adversarial) == int and self.adversarial == 2) or
-                                         (type(self.adversarial) == list and 2 in self.adversarial)):
-                        x2.requires_grad = False
-                        x2 += step * x2.grad
-                    if self.nc >= 4 and ((type(self.adversarial) == int and self.adversarial == 3) or
-                                         (type(self.adversarial) == list and 3 in self.adversarial)):
-                        x3.requires_grad = False
-                        x3 += sstep * x3.grad
+                if self.nc == 2:
+                    nd.append(utils_data.TensorDataset(x0, x1, y))
+                elif self.nc == 4:
+                    nd.append(utils_data.TensorDataset(x0, x1, x2, x3, y))
 
-                    loss_list.append(l.item())
-                    size.append(out.shape[0])
-
-                    if self.nc == 2:
-                        nd.append(utils_data.TensorDataset(x0, x1, y))
-                    elif self.nc == 4:
-                        nd.append(utils_data.TensorDataset(x0, x1, x2, x3, y))
-
-                nd = utils_data.ConcatDataset(nd)
-                loader = utils_data.DataLoader(nd, batch_size=loader.batch_size, num_workers=loader.num_workers,
-                                               pin_memory=loader.pin_memory)
-
-                loss_avg = np.average(loss_list, weights=size)
-                if self.verbose:
-                    print("%s\t%d\t%f" % ('Adv', epoch, loss_avg))
+            nd = utils_data.ConcatDataset(nd)
+            loader = utils_data.DataLoader(nd, batch_size=loader.batch_size, num_workers=loader.num_workers,
+                                           pin_memory=loader.pin_memory)
 
         return loader
 
