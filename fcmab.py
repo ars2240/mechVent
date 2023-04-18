@@ -30,7 +30,7 @@ def dot(a, b):
 
 class fcmab(object):
     def __init__(self, model, loss, opt, nc=2, n=10, epochs=10, c=.5, keep_best=True, head='', conf_matrix=False,
-                 adversarial=None, step=1, plot=True, m=0, ab=0, ucb_c=1, xdim=1, verbose=False):
+                 adversarial=None, adv_epoch=1, step=1, plot=True, m=0, ab=0, ucb_c=1, xdim=1, verbose=False):
 
         self.model = model  # model
         self.loss = loss  # loss
@@ -49,6 +49,7 @@ class fcmab(object):
         self.head = head  # file label
         self.conf_matrix = conf_matrix  # whether or not a confusion matrix is generated
         self.adversarial = adversarial  # which (if any) clients are adversarial
+        self.adv_epoch = adv_epoch  # number of adversarial epochs
         self.step = step  # step size of adversary
         self.plot = plot  # if validation accuracy is plotted
         self.m = m  # type of reward function
@@ -72,11 +73,11 @@ class fcmab(object):
         if 'mab' in self.c.lower():
             ucb_list, ucb_mean, ucb_std = [], [], []
         if self.c.lower() == 'mablin':
-            x0 = np.random.normal(size=(self.nc, self.xdim))
+            xz = np.random.normal(size=(self.nc, self.xdim))
             A = [np.identity(self.nc + self.xdim) for _ in range(self.nc)]
             b = [np.zeros((self.nc + self.xdim, 1)) for _ in range(self.nc)]
         elif self.c.lower() == 'mablinhyb':
-            x0 = np.random.normal(size=(self.nc, self.xdim))
+            xz = np.random.normal(size=(self.nc, self.xdim))
             A0 = np.identity(self.nc)
             b0 = np.zeros((self.nc, 1))
             A = [np.identity(self.xdim) for _ in range(self.nc)]
@@ -104,7 +105,7 @@ class fcmab(object):
                 ind = np.argsort(-self.theta)
                 th = self.theta[ind]
                 if self.c.lower() == 'mablin':
-                    x = [np.expand_dims(np.concatenate((self.theta, x0[j]), axis=None), axis=1) for j in range(self.nc)]
+                    x = [np.expand_dims(np.concatenate((self.theta, xz[j]), axis=None), axis=1) for j in range(self.nc)]
                     Ai = [np.linalg.inv(A[j]) for j in range(self.nc)]
                     th_hat = [np.matmul(Ai[j], b[j]) for j in range(self.nc)]
                     s = [matprod3(Ai[j], x[j]) for j in range(self.nc)]
@@ -125,11 +126,11 @@ class fcmab(object):
                     Ai = [np.linalg.inv(A[j]) for j in range(self.nc)]
                     th_hat = [np.matmul(Ai[j], b[j]-np.matmul(B[j], b_hat)) for j in range(self.nc)]
                     t0 = np.matmul(np.transpose(self.theta), A0i)
-                    t1 = [np.matmul(np.matmul(np.matmul(t0, np.transpose(B[j])), Ai[j]), x0[j]) for j in range(self.nc)]
-                    t2 = [matprod3(np.matmul(np.matmul(Ai[j], matprod3(A0i, np.transpose(B[j]))), Ai[j]), x0[j]) for j
+                    t1 = [np.matmul(np.matmul(np.matmul(t0, np.transpose(B[j])), Ai[j]), xz[j]) for j in range(self.nc)]
+                    t2 = [matprod3(np.matmul(np.matmul(Ai[j], matprod3(A0i, np.transpose(B[j]))), Ai[j]), xz[j]) for j
                           in range(self.nc)]
-                    s = [matprod3(A0i, self.theta) - 2 * t1[j] + matprod3(Ai[j], x0[j]) + t2[j] for j in range(self.nc)]
-                    ucb_m = [(dot(self.theta, b_hat) + dot(th_hat[j], x0[j])).item() for j in range(self.nc)]
+                    s = [matprod3(A0i, self.theta) - 2 * t1[j] + matprod3(Ai[j], xz[j]) + t2[j] for j in range(self.nc)]
+                    ucb_m = [(dot(self.theta, b_hat) + dot(th_hat[j], xz[j])).item() for j in range(self.nc)]
                     ucb_s = [np.sqrt(s[j]).item() for j in range(self.nc)]
                     ucb = [ucb_m[j] + self.ucb_c * ucb_s[j] for j in range(self.nc)]
                     if self.verbose:
@@ -242,9 +243,9 @@ class fcmab(object):
                 t = np.matmul(np.transpose(B[k]), Ai[k])
                 A0 += np.matmul(t, B[k])
                 b0 += np.matmul(t, b[k])
-                A[k] += np.outer(x0[k], x0[k])
-                B[k] += np.outer(x0[k], self.theta)
-                b[k] += m * x0[k]
+                A[k] += np.outer(xz[k], xz[k])
+                B[k] += np.outer(xz[k], self.theta)
+                b[k] += m * xz[k]
                 t = np.matmul(np.transpose(B[k]), np.linalg.inv(A[k]))
                 A0 += np.outer(self.theta, self.theta) - np.matmul(t, B[k])
                 b0 += m * np.expand_dims(self.theta, axis=1) - np.matmul(t, b[k])
@@ -425,46 +426,60 @@ class fcmab(object):
         if self.adversarial is not None and ((type(self.adversarial) == int and self.model.S[self.adversarial]) or (
                 type(self.adversarial) == list and all(self.model.S[a] for a in self.adversarial))):
 
-            nd = []
-            for _, data in enumerate(loader):
+            if self.verbose:
+                print('Iter\tEpoch\tLoss')
 
-                _, l, _ = self.model_loss(data, adversarial=True)
-                l.backward()
+            for epoch in range(self.adv_epoch):
+                step = self.step(epoch) if callable(self.step) else self.step
 
-                if self.nc == 2:
-                    x0, x1, y = data
-                elif self.nc == 4:
-                    x0, x1, x2, x3, y = data
-                else:
-                    raise Exception("Number of clients not implemented.")
+                nd, loss_list, size = [], [], []
+                for _, data in enumerate(loader):
 
-                if self.adversarial is None:
-                    raise Exception("No adversarial client selected.")
-                if self.nc >= 1 and ((type(self.adversarial) == int and self.adversarial == 0) or
-                                     (type(self.adversarial) == list and 0 in self.adversarial)):
-                    x0.requires_grad = False
-                    x0 += self.step * x0.grad
-                if self.nc >= 2 and ((type(self.adversarial) == int and self.adversarial == 1) or
-                                     (type(self.adversarial) == list and 1 in self.adversarial)):
-                    x1.requires_grad = False
-                    x1 += self.step * x1.grad
-                if self.nc >= 3 and ((type(self.adversarial) == int and self.adversarial == 2) or
-                                     (type(self.adversarial) == list and 2 in self.adversarial)):
-                    x2.requires_grad = False
-                    x2 += self.step * x2.grad
-                if self.nc >= 4 and ((type(self.adversarial) == int and self.adversarial == 3) or
-                                     (type(self.adversarial) == list and 3 in self.adversarial)):
-                    x3.requires_grad = False
-                    x3 += self.step * x3.grad
+                    _, l, _ = self.model_loss(data, adversarial=True)
+                    self.opt.zero_grad()
+                    l.backward()
 
-                if self.nc == 2:
-                    nd.append(utils_data.TensorDataset(x0, x1, y))
-                elif self.nc == 4:
-                    nd.append(utils_data.TensorDataset(x0, x1, x2, x3, y))
+                    if self.nc == 2:
+                        x0, x1, y = data
+                    elif self.nc == 4:
+                        x0, x1, x2, x3, y = data
+                    else:
+                        raise Exception("Number of clients not implemented.")
 
-            nd = utils_data.ConcatDataset(nd)
-            loader = utils_data.DataLoader(nd, batch_size=loader.batch_size, num_workers=loader.num_workers,
-                                           pin_memory=loader.pin_memory)
+                    if self.adversarial is None:
+                        raise Exception("No adversarial client selected.")
+                    if self.nc >= 1 and ((type(self.adversarial) == int and self.adversarial == 0) or
+                                         (type(self.adversarial) == list and 0 in self.adversarial)):
+                        x0.requires_grad = False
+                        x0 += step * x0.grad
+                    if self.nc >= 2 and ((type(self.adversarial) == int and self.adversarial == 1) or
+                                         (type(self.adversarial) == list and 1 in self.adversarial)):
+                        x1.requires_grad = False
+                        x1 += step * x1.grad
+                    if self.nc >= 3 and ((type(self.adversarial) == int and self.adversarial == 2) or
+                                         (type(self.adversarial) == list and 2 in self.adversarial)):
+                        x2.requires_grad = False
+                        x2 += step * x2.grad
+                    if self.nc >= 4 and ((type(self.adversarial) == int and self.adversarial == 3) or
+                                         (type(self.adversarial) == list and 3 in self.adversarial)):
+                        x3.requires_grad = False
+                        x3 += sstep * x3.grad
+
+                    loss_list.append(l.item())
+                    size.append(out.shape[0])
+
+                    if self.nc == 2:
+                        nd.append(utils_data.TensorDataset(x0, x1, y))
+                    elif self.nc == 4:
+                        nd.append(utils_data.TensorDataset(x0, x1, x2, x3, y))
+
+                nd = utils_data.ConcatDataset(nd)
+                loader = utils_data.DataLoader(nd, batch_size=loader.batch_size, num_workers=loader.num_workers,
+                                               pin_memory=loader.pin_memory)
+
+                loss_avg = np.average(loss_list, weights=size)
+                if self.verbose:
+                    print("%s\t%d\t%f" % ('Adv', epoch, loss_avg))
 
         return loader
 
