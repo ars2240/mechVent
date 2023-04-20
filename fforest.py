@@ -15,7 +15,8 @@ opt = torch.optim.Adam(model.parameters())
 loss = nn.CrossEntropyLoss()
 
 # cmab = fcmab(model, loss, opt, nc=2, n=100, c='mabLin', head='forest_mean_LR_actadv_nmap2_mabLin', adversarial=0, m=1, ab=1)
-cmab = fcmab(model, loss, opt, nc=2, n=100, c='mabLin', head='forest_mean_LR_actadv10_step1_mabLin', adv_epoch=10, step=1, adversarial=0, verbose=True)
+cmab = fcmab(model, loss, opt, nc=2, n=100, c='mabLin', head='forest_mean_LR_actAdvAdam10_step_mabLin', adv_epoch=10,
+             adv_opt='adam', adv_step=.001, adversarial=0, verbose=True)
 # cmab = fcmab(model, loss, opt, nc=2, n=100, c='mabLin', head='forest_mean_LR_nmap2_mabLin_c.6', m=1, ab=1, ucb_c=.6)
 # cmab = fcmab(model, loss, opt, nc=2, n=100, c='mabLin', head='forest_mean_LR_mabLin_c8', ucb_c=8, verbose=True)
 cmab.train(train_loader, valid_loader, test_loader)
