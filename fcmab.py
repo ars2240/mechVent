@@ -190,14 +190,14 @@ class fcmab(object):
                     tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
                     print("%d\t%d\t%f" % (i, epoch, tr_loss))
 
-                if self.adv_epoch > 1:
+                if self.adversarial is not None and self.adv_epoch > 1:
                     for ep in range(self.adv_epoch):
                         train_loader = self.adversary(train_loader, ep)
                         val_loader = self.adversary(val_loader, ep)
                         if self.verbose:
                             tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
                             print("%s\t%d\t%f" % ('A{0}'.format(ep), epoch, tr_loss))
-                else:
+                elif self.adversarial is not None:
                     train_loader = self.adversary(train_loader, epoch)
                     val_loader = self.adversary(val_loader, epoch)
                     if self.verbose:
