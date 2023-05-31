@@ -11,22 +11,24 @@ simplefilter("ignore", category=ConvergenceWarning)
 
 
 # c0 = [*range(0, 6), 9, *range(14, 54)]
-# c0 = [1, 6, 8]
-c0 = [6, 20, 22, 25, 32, 40, 49]
+c0 = [1, 6, 8]
+# c0 = [6, 20, 22, 25, 32, 40, 49]
 print('client 0: {0}'.format(c0))
 # c1 = [*range(6, 9), *range(10, 54)]
-# c1 = [4, 5, 9]
-c1 = [9, 21, 28, 31, 38, 39, 41]
+c1 = [4, 5, 9]
+# c1 = [9, 21, 28, 31, 38, 39, 41]
 print('client 1: {0}'.format(c1))
 shared = [x for x in range(0, 54) if x not in c0 and x not in c1]
 print('shared: {0}'.format(shared))
 ag_ignore = True
+rand_init = True
 epochs = 300
 inner = 10
 test_size, valid_size = 0.2, 0.2
 random_seed = 1226
 model = LogisticRegression(max_iter=inner)
-head = 'advLogReg3AdamIgn'
+modelC = LogisticRegression(max_iter=inner)
+head = 'advLogReg2AdamIgnRandInit'
 adv_opt = 'adam'
 adv_beta = (0.9, 0.999)
 adv_eps = 1e-8
@@ -51,16 +53,13 @@ filename2 = download(u)
 data = pd.read_csv(filename2, header=None)
 
 X = data.values[:, :-1]
+X = X.reshape((X.shape[0], 54))
 y = data.values[:, -1] - 1
 
 enc = OneHotEncoder(handle_unknown='ignore')
 enc.fit(y.reshape(-1, 1))
 
 X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=random_seed)
-
-X = X.reshape((X.shape[0], 54))
-X_test = X_test.reshape((X_test.shape[0], 54))
-
 X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=random_seed)
 
 # normalize data
@@ -78,6 +77,11 @@ if ag_ignore:
     X_ag = X[:, adv]
     X_ag_valid = X_valid[:, adv]
     X_ag_test = X_test[:, adv]
+
+if rand_init:
+    X[:, adv] = np.random.normal(size=(X.shape[0], len(adv)))
+    X_valid[:, adv] = np.random.normal(size=(X_valid.shape[0], len(adv)))
+    X_test[:, adv] = np.random.normal(size=(X_test.shape[0], len(adv)))
 
 
 def adversary(model, X, y, j):
@@ -105,7 +109,7 @@ def adversary_adam(model, X, y, j, m, v):
     return X, m, v
 
 
-loss, lossH = [], []
+loss, lossH, lossC = [], [], []
 best_acc = 1
 best_model = None
 X_best, X_valid_best, X_test_best = X, X_valid, X_test
@@ -128,6 +132,10 @@ for i in range(epochs):
         best_model = model
         X_best, X_valid_best, X_test_best = X, X_valid, X_test
     loss.append(l)
+    if ag_ignore:
+        modelC.fit(np.concatenate((X, X_ag), axis=1), y)
+        lc = modelC.score(np.concatenate((X_valid, X_ag_valid), axis=1), y_valid)
+        lossC.append(lc)
 
 check_folder('./logs')
 np.savetxt("./logs/" + head + "_coef.csv", model.coef_, delimiter=",")
@@ -167,10 +175,14 @@ np.savetxt("./data/" + head + "_best_y_valid.csv", y_valid, delimiter=",")
 np.savetxt("./data/" + head + "_best_y_test.csv", y_test, delimiter=",")
 
 check_folder('./plots')
-plt.plot(loss)
+plt.plot(loss, label='post-Adv')
+plt.plot(lossH, label='pre-Adv')
+if ag_ignore:
+    plt.plot(lossC, label='combined')
 plt.title('Validation Accuracy')
 plt.xlabel("Iterations")
 plt.ylabel("Accuracy")
+plt.legend()
 plt.savefig('./plots/' + head + '.png')
 plt.clf()
 plt.close()

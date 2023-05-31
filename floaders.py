@@ -149,9 +149,9 @@ def cifar_loader(root='./data', batch_size=1, random_seed=1226, valid_size=0.2, 
     return train_loader, valid_loader, test_loader
 
 
-def forest_loader(batch_size=1, test_size=0.2, random_seed=1226, valid_size=0.2, num_workers=0, pin_memory=True,
+def forest_loader(batch_size=1, random_seed=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
                   u='https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz',
-                  c0=[*range(0, 6), 9, *range(14, 54)], c1=[*range(6, 9), *range(10, 54)]):
+                  c0=[*range(0, 6), 9, *range(14, 54)], c1=[*range(6, 9), *range(10, 54)], adv=False):
     # Load Data
     filename2 = download(u)
 
@@ -159,13 +159,10 @@ def forest_loader(batch_size=1, test_size=0.2, random_seed=1226, valid_size=0.2,
     data = pd.read_csv(filename2, header=None)
 
     X = data.values[:, :-1]
+    X = X.reshape((X.shape[0], 54))
     y = data.values[:, -1] - 1
 
     X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=random_seed)
-
-    X = X.reshape((X.shape[0], 54))
-    X_test = X_test.reshape((X_test.shape[0], 54))
-
     X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=random_seed)
 
     # normalize data
@@ -184,13 +181,16 @@ def forest_loader(batch_size=1, test_size=0.2, random_seed=1226, valid_size=0.2,
     y_valid = torch.from_numpy(y_valid).long()
 
     x1, x2 = X[:, c0], X[:, c1]
-    x1 += torch.normal(mean=0, std=1, size=x1.size())
+    if adv:
+        x1 += torch.normal(mean=0, std=1, size=x1.size())
     train_data = utils_data.TensorDataset(x1, x2, y)
     x1, x2 = X_valid[:, c0], X_valid[:, c1]
-    x1 += torch.normal(mean=0, std=1, size=x1.size())
+    if adv:
+        x1 += torch.normal(mean=0, std=1, size=x1.size())
     valid_data = utils_data.TensorDataset(x1, x2, y_valid)
     x1, x2 = X_test[:, c0], X_test[:, c1]
-    x1 += torch.normal(mean=0, std=1, size=x1.size())
+    if adv:
+        x1 += torch.normal(mean=0, std=1, size=x1.size())
     test_data = utils_data.TensorDataset(x1, x2, y_test)
 
     train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
@@ -203,17 +203,42 @@ def forest_loader(batch_size=1, test_size=0.2, random_seed=1226, valid_size=0.2,
     return train_loader, valid_loader, test_loader
 
 
-def adv_forest_loader(batch_size=1, num_workers=0, pin_memory=True, split=14, head='advLogReg'):
+def adv_forest_loader(batch_size=1, num_workers=0, pin_memory=True, split=14, head='advLogReg', adv_valid=True,
+                      u='https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz',
+                      c0=[*range(0, 6), 9, *range(14, 54)], c1=[*range(6, 9), *range(10, 54)], random_seed=1226,
+                      test_size=0.2, valid_size=0.2):
 
     check_folder('./data/')
 
     # import data
     X = np.genfromtxt('./data/' + head + '.csv', delimiter=',')
     y = np.genfromtxt('./data/' + head + '_y.csv', delimiter=',')
-    X_valid = np.genfromtxt('./data/' + head + '_valid.csv', delimiter=',')
-    y_valid = np.genfromtxt('./data/' + head + '_y_valid.csv', delimiter=',')
-    X_test = np.genfromtxt('./data/' + head + '_test.csv', delimiter=',')
-    y_test = np.genfromtxt('./data/' + head + '_y_test.csv', delimiter=',')
+    if adv_valid:
+        X_valid = np.genfromtxt('./data/' + head + '_valid.csv', delimiter=',')
+        y_valid = np.genfromtxt('./data/' + head + '_y_valid.csv', delimiter=',')
+        X_test = np.genfromtxt('./data/' + head + '_test.csv', delimiter=',')
+        y_test = np.genfromtxt('./data/' + head + '_y_test.csv', delimiter=',')
+    else:
+        # Load Data
+        filename2 = download(u)
+
+        # import dataset
+        data = pd.read_csv(filename2, header=None)
+
+        Xg = data.values[:, :-1]
+        Xg = Xg.reshape((Xg.shape[0], 54))
+        yg = data.values[:, -1] - 1
+
+        Xg, X_test, yg, y_test = train_test_split(np.array(Xg), np.array(yg), test_size=test_size,
+                                                  random_state=random_seed)
+        Xg, X_valid, yg, y_valid = train_test_split(np.array(Xg), np.array(yg), test_size=valid_size,
+                                                    random_state=random_seed)
+
+        # normalize data
+        scaler = StandardScaler()
+        scaler.fit(Xg)
+        X_valid = scaler.transform(X_valid)
+        X_test = scaler.transform(X_test)
 
     # convert data-types
     X = torch.from_numpy(X).float()
@@ -225,9 +250,15 @@ def adv_forest_loader(batch_size=1, num_workers=0, pin_memory=True, split=14, he
 
     x1, x2 = X[:, :split], X[:, split:]
     train_data = utils_data.TensorDataset(x1, x2, y)
-    x1, x2 = X_valid[:, :split], X_valid[:, split:]
+    if adv_valid:
+        x1, x2 = X_valid[:, :split], X_valid[:, split:]
+    else:
+        x1, x2 = X_valid[:, c0], X_valid[:, c1]
     valid_data = utils_data.TensorDataset(x1, x2, y_valid)
-    x1, x2 = X_test[:, :split], X_test[:, split:]
+    if adv_valid:
+        x1, x2 = X_test[:, :split], X_test[:, split:]
+    else:
+        x1, x2 = X_test[:, c0], X_test[:, c1]
     test_data = utils_data.TensorDataset(x1, x2, y_test)
 
     train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,

@@ -178,7 +178,13 @@ class fcmab(object):
                 print('Iter\tEpoch\tLoss')
             self.model.train()
             for epoch in range(self.epochs):
-                for _, data in enumerate(train_loader):
+                for j, data in enumerate(train_loader):
+
+                    if j == 0 and epoch == 0 and self.verbose:
+                        x0, x1, y = data
+                        print('x0: {0}'.format(x0))
+                        print('x1: {0}'.format(x1))
+                        print('y: {0}'.format(y))
 
                     _, l, _ = self.model_loss(data)
 
@@ -277,7 +283,7 @@ class fcmab(object):
         if self.verbose:
             print(self.model.S)
         print('Train\tAcc\tTest\tAcc')
-        train_loss, train_acc = self.loss_acc(train_loader, head=self.head + '_train')
+        train_loss, train_acc = self.loss_acc(train_loader, head=self.head + '_tr')
         test_loss, test_acc = self.loss_acc(test_loader, head=self.head + '_test')
         print("%f\t%f\t%f\t%f" % (train_loss, train_acc, test_loss, test_acc))
 
@@ -376,10 +382,10 @@ class fcmab(object):
     def model_loss(self, data, adversarial=False):
         if self.nc == 2:
             x0, x1, y = data
-            x = x0, x1
+            X = x0, x1
         elif self.nc == 4:
             x0, x1, x2, x3, y = data
-            x = x0, x1, x2, x3
+            X = x0, x1, x2, x3
         else:
             raise Exception("Number of clients not implemented.")
 
@@ -398,7 +404,7 @@ class fcmab(object):
                                              (type(self.adversarial) == list and 3 in self.adversarial)):
             x3.requires_grad_()
 
-        out = self.model(x)
+        out = self.model(X)
         if self.model.classes == 1:
             l = self.loss(torch.squeeze(out).float(), y.float())
         else:
@@ -431,6 +437,8 @@ class fcmab(object):
         if self.conf_matrix:
             conf = confusion_matrix(labels, outputs)
             np.savetxt("./logs/" + head + "_conf_matrix.csv", conf, delimiter=",")
+            lp = np.concatenate((np.expand_dims(labels, axis=1), np.expand_dims(outputs, axis=1)), axis=1)
+            np.savetxt("./logs/" + head + "_labels_pred.csv", lp, delimiter=",")
 
         return np.average(loss_list, weights=size), np.average(acc_list, weights=size)
 
@@ -537,9 +545,12 @@ class fcmab(object):
         torch.save({'model_state_dict': self.model.state_dict(), 'S': self.model.S, 'v': self.model.v},
                    './models/' + head + '.pt')
 
-    def load(self, head=None):
+    def load(self, head=None, info=False):
         head = self.head if head is None else head
         model = torch.load('./models/' + head + '.pt')
+        if info:
+            for key, value in model['model_state_dict'].items():
+                np.savetxt('./models/' + head + '_' + key + '.csv', value.detach().numpy(), delimiter=",")
         self.model.load_state_dict(model['model_state_dict'])
         self.model.S = model['S']
         self.model.v = model['v']
