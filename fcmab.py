@@ -72,7 +72,7 @@ class fcmab(object):
         log_file.close()  # close log file
         sys.stdout = old_stdout  # reset output
 
-        best_acc = 0
+        best_acc, best_iter = 0, 'N/A'
         map = 0.5
         tr_acc_list, val_acc_list, map_list, s_list, theta_list = [], [], [], [], []
         if 'mab' in self.c.lower():
@@ -228,6 +228,7 @@ class fcmab(object):
             if self.keep_best and val_acc > best_acc:
                 best_acc = val_acc
                 self.save(head=self.head + '_best')
+                best_iter = i
                 print('new high!')
 
             # compute rewards
@@ -272,13 +273,15 @@ class fcmab(object):
             log_file.close()  # close log file
             sys.stdout = old_stdout  # reset output
 
-        if self.keep_best:
-            self.load(head=self.head + '_best')
-
         # open log
         old_stdout = sys.stdout  # save old output
         log_file = open('./logs/' + self.head + '.log', 'a')  # open log file
         sys.stdout = log_file  # write to log file
+
+        print('Results:')
+        if self.keep_best:
+            print('Best iteration: {0}'.format(best_iter))
+            self.load(head=self.head + '_best')
 
         if self.verbose:
             print(self.model.S)
