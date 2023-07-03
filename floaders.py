@@ -149,9 +149,12 @@ def cifar_loader(root='./data', batch_size=1, random_seed=1226, valid_size=0.2, 
     return train_loader, valid_loader, test_loader
 
 
-def forest_loader(batch_size=1, random_seed=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
+def forest_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
                   u='https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz', std=1,
                   c0=[*range(0, 6), 9, *range(14, 54)], c1=[*range(6, 9), *range(10, 54)], adv=[], adv_valid=True):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
     # Load Data
     filename2 = download(u)
 
@@ -162,8 +165,8 @@ def forest_loader(batch_size=1, random_seed=1226, test_size=0.2, valid_size=0.2,
     X = X.reshape((X.shape[0], 54))
     y = data.values[:, -1] - 1
 
-    X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=random_seed)
-    X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=random_seed)
+    X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=state)
+    X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
 
     # normalize data
     scaler = StandardScaler()
@@ -309,6 +312,105 @@ def taiwan_loader(batch_size=1, test_size=0.2, random_seed=1226, valid_size=0.2,
     valid_data = utils_data.TensorDataset(x1, x2, y_valid)
     x1, x2 = X_test[:, :61], X_test[:, 40:]
     x1 += torch.normal(mean=0, std=1, size=x1.size())
+    test_data = utils_data.TensorDataset(x1, x2, y_test)
+
+    train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
+                                         pin_memory=pin_memory)
+    valid_loader = utils_data.DataLoader(valid_data, batch_size=batch_size, num_workers=num_workers,
+                                         pin_memory=pin_memory)
+    test_loader = utils_data.DataLoader(test_data, batch_size=batch_size, num_workers=num_workers,
+                                        pin_memory=pin_memory)
+
+    return train_loader, valid_loader, test_loader
+
+
+def replace_str_cols(co, col_names):
+    cols = []
+    for cn in co:
+        cols.extend([c for c in range(len(col_names)) if col_names[c].startswith(cn)])
+    return cols
+
+
+def ni_loader(batch_size=1, seed=1226, state=1226, valid_size=0.2, num_workers=0, pin_memory=True, std=1,
+                  c0=[], c1=[], adv=[], adv_valid=True):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    # Load Data
+    u = 'http://kdd.ics.uci.edu/databases/kddcup99/kddcup.data.gz'
+    filename2 = download(u)
+    u = 'http://kdd.ics.uci.edu/databases/kddcup99/corrected.gz'
+    filename3 = download(u)
+
+    # import dataset
+    train = pd.read_csv(filename2, header=None)
+    test = pd.read_csv(filename3, header=None)
+
+    # transform to supercategories
+    if classes == 2:
+        dic = {'normal.': 'normal', 'land.': 'dos', 'pod.': 'dos', 'teardrop.': 'dos', 'back.': 'dos',
+               'neptune.': 'dos', 'smurf.': 'dos'}
+    elif classes == 5:
+        dic = {'normal.': 'normal', 'nmap.': 'probing', 'portsweep.': 'probing', 'ipsweep.': 'probing',
+               'satan.': 'probing', 'land.': 'dos', 'pod.': 'dos', 'teardrop.': 'dos', 'back.': 'dos',
+               'neptune.': 'dos', 'smurf.': 'dos', 'spy.': 'r2l', 'phf.': 'r2l', 'multihop.': 'r2l',
+               'ftp_write.': 'r2l', 'imap.': 'r2l', 'warezmaster.': 'r2l', 'guess_passwd.': 'r2l',
+               'buffer_overflow.': 'u2r', 'rootkit.': 'u2r', 'loadmodule.': 'u2r', 'perl.': 'u2r'}
+    else:
+        raise Exception('Invalid number of classes')
+    i = train.shape[1] - 1
+    train = train.loc[train[i].isin(dic.keys())]
+    train.replace({i: dic}, inplace=True)
+    test = test.loc[test[i].isin(dic.keys())]
+    test.replace({i: dic}, inplace=True)
+
+    train_len = train.shape[0]  # save length of training set
+    train = pd.concat([train, test], ignore_index=True)
+    train.columns = cols_orig
+    inputs = pd.get_dummies(train)  # convert objects to one-hot encoding
+    train_feat = inputs.shape[1] - classes  # number of features
+    col_names = list(inputs.columns)
+    print(col_names)
+
+    X = inputs.values[:train_len, :-classes]
+    y_onehot = inputs.values[:train_len, -classes:]
+    y = np.asarray([np.where(r == 1)[0][0] for r in y_onehot])  # convert from one-hot to integer encoding
+
+    X_test = inputs.values[train_len:, :-classes]
+    y_test_onehot = inputs.values[train_len:, -classes:]
+    y_test = np.asarray([np.where(r == 1)[0][0] for r in y_test_onehot])  # convert from one-hot to integer encoding
+
+    X = X.reshape((train_len, train_feat))
+    X_test = X_test.reshape((test.shape[0], train_feat))
+
+    X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
+
+    # normalize data
+    scaler = StandardScaler()
+    scaler.fit(X)
+    X = scaler.transform(X)
+    X_valid = scaler.transform(X_valid)
+    X_test = scaler.transform(X_test)
+
+    # convert data-types
+    X = torch.from_numpy(X).float()
+    y = torch.from_numpy(y).long()
+    X_test = torch.from_numpy(X_test).float()
+    y_test = torch.from_numpy(y_test).long()
+    X_valid = torch.from_numpy(X_valid).float()
+    y_valid = torch.from_numpy(y_valid).long()
+
+    x1, x2 = X[:, c0], X[:, c1]
+    if len(adv) > 0:
+        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
+    train_data = utils_data.TensorDataset(x1, x2, y)
+    x1, x2 = X_valid[:, c0], X_valid[:, c1]
+    if len(adv) > 0 and adv_valid:
+        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
+    valid_data = utils_data.TensorDataset(x1, x2, y_valid)
+    x1, x2 = X_test[:, c0], X_test[:, c1]
+    if len(adv) > 0 and adv_valid:
+        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
     test_data = utils_data.TensorDataset(x1, x2, y_test)
 
     train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,

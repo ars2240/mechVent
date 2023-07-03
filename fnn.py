@@ -36,8 +36,9 @@ class FLC(nn.Module):
 
 
 class FLN(nn.Module):
-    def __init__(self, train_feat, nc=4, classes=5, h1=None, h2=None, doub=False):
+    def __init__(self, train_feat, nc=4, classes=5, h1=None, h2=None, doub=False, seed=1226):
         super(FLN, self).__init__()
+        torch.manual_seed(seed)
         """
         self.fl0 = FL0(cur_host=True) if cur_host == 0 else FL0(cur_host=False)
         self.fl1 = FL1(cur_host=True) if cur_host == 1 else FL1(cur_host=False)
@@ -100,7 +101,8 @@ class FLN(nn.Module):
 
 
 class FLR(nn.Module):
-    def __init__(self, train_feat, nc=4, classes=5):
+    def __init__(self, train_feat, nc=4, classes=5, seed=1226):
+        torch.manual_seed(seed)
         super(FLR, self).__init__()
         self.nc = nc
         self.classes = classes

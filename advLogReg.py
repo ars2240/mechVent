@@ -21,7 +21,7 @@ c1 = []
 print('client 1: {0}'.format(c1))
 shared = [x for x in range(0, 54) if x not in c0 and x not in c1]
 print('shared: {0}'.format(shared))
-fl = 'vertical'  # none, horizontal, or vertical
+fl = 'none'  # none, horizontal, or vertical
 adv_valid = False
 rand_init = True
 epochs = 500
@@ -31,7 +31,7 @@ test_size, valid_size = 0.2, 0.2
 random_seed = 1226
 model = LogisticRegression(max_iter=inner)
 modelC = LogisticRegression(max_iter=inner)
-head = 'advLogReg2AdamRandInitVertShare12'
+head = 'advLogReg2AdamRandInitShare12'
 adv_opt = 'adam'
 adv_beta = (0.9, 0.999)
 adv_eps = 1e-8
@@ -95,7 +95,7 @@ else:
     X_valid = np.concatenate((X_valid[:, c0], X_valid[:, c1]), axis=1)
     X_test = np.concatenate((X_test[:, c0], X_test[:, c1]), axis=1)
 
-if fl.lower() == 'vertical':
+if fl.lower() == 'none':
     X_ag = X[:, adv]
     X_ag_valid = X_valid[:, adv]
     X_ag_test = X_test[:, adv]
@@ -166,7 +166,7 @@ for i in range(epochs):
         best_model = model
         X_best, X_valid_best, X_test_best = X.copy(), X_valid.copy(), X_test.copy()
     loss.append(l)
-    if fl.lower() == 'vertical':
+    if fl.lower() == 'none':
         modelC.fit(np.concatenate((X, X_ag), axis=1), y)
         lc = modelC.score(np.concatenate((X_valid, X_ag_valid), axis=1), y_valid)
         lossC.append(lc)
@@ -182,7 +182,7 @@ np.savetxt("./logs/" + head + "_best_intercept.csv", best_model.intercept_, deli
 model_fi = permutation_importance(best_model, X, y)
 np.savetxt("./logs/" + head + "_best_importanceAdv.csv", model_fi['importances_mean'], delimiter=",")
 
-if fl.lower() == 'vertical':
+if fl.lower() == 'none':
     X = np.concatenate((X, X_ag), axis=1)
     X_valid = np.concatenate((X_valid, X_ag_valid), axis=1)
     X_test = np.concatenate((X_test, X_ag_test), axis=1)
@@ -195,7 +195,7 @@ np.savetxt("./data/" + head + "_y.csv", y, delimiter=",")
 np.savetxt("./data/" + head + "_y_valid.csv", y_valid, delimiter=",")
 np.savetxt("./data/" + head + "_y_test.csv", y_test, delimiter=",")
 
-if fl.lower() == 'vertical':
+if fl.lower() == 'none':
     X_best = np.concatenate((X_best, X_ag), axis=1)
     X_valid_best = np.concatenate((X_valid_best, X_ag_valid), axis=1)
     X_test_best = np.concatenate((X_test_best, X_ag_test), axis=1)
@@ -212,12 +212,12 @@ check_folder('./plots')
 plt.plot(loss, label='post-Adv')
 if adv_valid:
     plt.plot(lossH, label='pre-Adv')
-if fl.lower() == 'vertical':
+if fl.lower() == 'none':
     plt.plot(lossC, label='combined')
 plt.title('Validation Accuracy')
 plt.xlabel("Iterations")
 plt.ylabel("Accuracy")
-if adv_valid or fl.lower() == 'vertical':
+if adv_valid or fl.lower() == 'none':
     plt.legend()
 plt.savefig('./plots/' + head + '.png')
 plt.clf()

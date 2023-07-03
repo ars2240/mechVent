@@ -29,9 +29,12 @@ def dot(a, b):
 
 
 class fcmab(object):
-    def __init__(self, model, loss, opt, nc=2, n=10, epochs=10, c=.5, keep_best=True, head='', conf_matrix=False,
-                 adversarial=None, adv_epoch=1, adv_opt='sgd', adv_beta=(0.9, 0.999), adv_eps=1e-8, adv_step=1, plot=True,
-                 m=0, ab=0, ucb_c=1, xdim=1, verbose=False):
+    def __init__(self, model, loss, opt, nc=2, n=10, epochs=10, c=.5, keep_best=True, seed=1226, head='',
+                 conf_matrix=False, adversarial=None, adv_epoch=1, adv_opt='sgd', adv_beta=(0.9, 0.999), adv_eps=1e-8,
+                 adv_step=1, plot=True, m=0, ab=0, ucb_c=1, xdim=1, verbose=False):
+
+        np.random.seed(seed)
+        torch.manual_seed(seed)
 
         self.model = model  # model
         self.loss = loss  # loss
