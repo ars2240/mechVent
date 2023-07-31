@@ -274,20 +274,19 @@ def adv_forest_loader(batch_size=1, num_workers=0, pin_memory=True, split=14, he
     return train_loader, valid_loader, test_loader
 
 
-def taiwan_loader(batch_size=1, test_size=0.2, random_seed=1226, valid_size=0.2, num_workers=0, pin_memory=True,
-                  u='taiwan.csv'):
+def taiwan_loader(batch_size=1, test_size=0.2, seed=1226, state=1226, valid_size=0.2, num_workers=0, pin_memory=True,
+                  c0=[], c1=[], adv=[], adv_valid=True, u='taiwan.csv'):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
     # import dataset
     data = pd.read_csv('./data/' + u, header=0)
 
     X = data.values[:, 1:]
-    y = data.values[:, 1]
+    y = data.values[:, 0]
 
-    X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=random_seed)
-
-    X = X.reshape((X.shape[0], 95))
-    X_test = X_test.reshape((X_test.shape[0], 95))
-
-    X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=random_seed)
+    X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=state)
+    X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
 
     # normalize data
     scaler = StandardScaler()
@@ -304,14 +303,17 @@ def taiwan_loader(batch_size=1, test_size=0.2, random_seed=1226, valid_size=0.2,
     X_valid = torch.from_numpy(X_valid).float()
     y_valid = torch.from_numpy(y_valid).long()
 
-    x1, x2 = X[:, :61], X[:, 40:]
-    x1 += torch.normal(mean=0, std=1, size=x1.size())
+    x1, x2 = X[:, c0], X[:, c1]
+    if len(adv) > 0:
+        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
     train_data = utils_data.TensorDataset(x1, x2, y)
-    x1, x2 = X_valid[:, :61], X_valid[:, 40:]
-    x1 += torch.normal(mean=0, std=1, size=x1.size())
+    x1, x2 = X_valid[:, c0], X_valid[:, c1]
+    if len(adv) > 0 and adv_valid:
+        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
     valid_data = utils_data.TensorDataset(x1, x2, y_valid)
-    x1, x2 = X_test[:, :61], X_test[:, 40:]
-    x1 += torch.normal(mean=0, std=1, size=x1.size())
+    x1, x2 = X_test[:, c0], X_test[:, c1]
+    if len(adv) > 0 and adv_valid:
+        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
     test_data = utils_data.TensorDataset(x1, x2, y_test)
 
     train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
@@ -331,8 +333,12 @@ def replace_str_cols(co, col_names):
     return cols
 
 
+with open('ni_cols_orig.txt', 'r') as f:
+    cols_orig = f.read().split('\n')
+
+
 def ni_loader(batch_size=1, seed=1226, state=1226, valid_size=0.2, num_workers=0, pin_memory=True, std=1,
-                  c0=[], c1=[], adv=[], adv_valid=True):
+                  c0=[], c1=[], adv=[], adv_valid=True, classes=2):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
@@ -369,8 +375,6 @@ def ni_loader(batch_size=1, seed=1226, state=1226, valid_size=0.2, num_workers=0
     train.columns = cols_orig
     inputs = pd.get_dummies(train)  # convert objects to one-hot encoding
     train_feat = inputs.shape[1] - classes  # number of features
-    col_names = list(inputs.columns)
-    print(col_names)
 
     X = inputs.values[:train_len, :-classes]
     y_onehot = inputs.values[:train_len, -classes:]
