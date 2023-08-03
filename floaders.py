@@ -52,18 +52,6 @@ def download(url):
     return fname
 
 
-def cropL(image: PIL.Image.Image) -> PIL.Image.Image:
-    """Crop the images so only a specific region of interest is shown to my PyTorch model"""
-    left, top, width, height = 0, 0, 24, 32
-    return transforms.functional.crop(image, left=left, top=top, width=width, height=height)
-
-
-def cropR(image: PIL.Image.Image) -> PIL.Image.Image:
-    """Crop the images so only a specific region of interest is shown to my PyTorch model"""
-    left, top, width, height = 8, 0, 24, 32
-    return transforms.functional.crop(image, left=left, top=top, width=width, height=height)
-
-
 def getData(data, num_workers=0, pin_memory=False):
     loader = utils_data.DataLoader(data, batch_size=len(data), num_workers=num_workers, pin_memory=pin_memory)
     data_iter = iter(loader)
@@ -71,8 +59,8 @@ def getData(data, num_workers=0, pin_memory=False):
     return x, y
 
 
-def cifar_loader(root='./data', batch_size=1, random_seed=1226, valid_size=0.2, shuffle=False, num_workers=0,
-                 pin_memory=True, download=False):
+def cifar_loader(root='./data', batch_size=1, seed=1226, valid_size=0.2, shuffle=False, num_workers=0,
+                 pin_memory=True, download=False, crop=8, blur=3, pad=True):
     """
     Utility function for loading and returning train and valid
     multi-process iterators over the CIFAR-10 dataset. A sample
@@ -99,20 +87,46 @@ def cifar_loader(root='./data', batch_size=1, random_seed=1226, valid_size=0.2, 
     assert ((valid_size >= 0) and (valid_size <= 1)), error_msg
     check_folder(root)
 
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    def cropL(image: PIL.Image.Image) -> PIL.Image.Image:
+        """Crop the images so only a specific region of interest is shown to my PyTorch model"""
+        left, top, width, height = 0, 0, 32 - crop, 32
+        return transforms.functional.crop(image, left=left, top=top, width=width, height=height)
+
+    def cropR(image: PIL.Image.Image) -> PIL.Image.Image:
+        """Crop the images so only a specific region of interest is shown to my PyTorch model"""
+        left, top, width, height = crop, 0, 32 - crop, 32
+        return transforms.functional.crop(image, left=left, top=top, width=width, height=height)
+
     # define transforms
-    transformL = transforms.Compose([
-        transforms.Lambda(cropL),
-        transforms.GaussianBlur(3),
-        transforms.Pad([0, 0, 8, 0]),
-        transforms.ToTensor(),
-        normalize,
-    ])
-    transformR = transforms.Compose([
-        transforms.Lambda(cropR),
-        transforms.Pad([8, 0, 0, 0]),
-        transforms.ToTensor(),
-        normalize,
-    ])
+    if pad:
+        transformL = transforms.Compose([
+            transforms.Lambda(cropL),
+            transforms.GaussianBlur(blur),
+            transforms.Pad([0, 0, crop, 0]),
+            transforms.ToTensor(),
+            normalize,
+        ])
+        transformR = transforms.Compose([
+            transforms.Lambda(cropR),
+            transforms.Pad([crop, 0, 0, 0]),
+            transforms.ToTensor(),
+            normalize,
+        ])
+    else:
+        transformL = transforms.Compose([
+            transforms.Lambda(cropL),
+            transforms.GaussianBlur(blur),
+            transforms.ToTensor(),
+            normalize,
+        ])
+        transformR = transforms.Compose([
+            transforms.Lambda(cropR),
+            transforms.ToTensor(),
+            normalize,
+        ])
 
     # load the dataset
     dL = datasets.CIFAR10(root=root, train=True, download=download, transform=transformL)
@@ -132,7 +146,6 @@ def cifar_loader(root='./data', batch_size=1, random_seed=1226, valid_size=0.2, 
     split = int(np.floor(valid_size * num_train))
 
     if shuffle:
-        np.random.seed(random_seed)
         np.random.shuffle(indices)
 
     train_idx, valid_idx = indices[split:], indices[:split]

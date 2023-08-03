@@ -136,16 +136,80 @@ class FLR(nn.Module):
                 x0, x1, x2, x3 = x[:, :tf[0]], x[:, tf[0]:tf[1]], x[:, tf[1]:tf[2]], x[:, tf[2]:]
             else:
                 raise Exception('Invalid number of inputs.')
+
+        x0 = x0.reshape(x0.shape[0], -1)
         fl0 = self.fl0(x0) if self.S[0] else self.v[0].repeat(x0.shape[0], 1)
+        x1 = x1.reshape(x1.shape[0], -1)
         fl1 = self.fl1(x1) if self.S[1] else self.v[1].repeat(x1.shape[0], 1)
         if self.nc >= 3:
+            x2 = x2.reshape(x2.shape[0], -1)
             fl2 = self.fl2(x2) if self.S[2] else self.v[2].repeat(x2.shape[0], 1)
         if self.nc >= 4:
+            x3 = x3.reshape(x3.shape[0], -1)
             fl3 = self.fl3(x3) if self.S[3] else self.v[3].repeat(x3.shape[0], 1)
+
         if self.nc == 2:
             x = fl0 + fl1
         elif self.nc == 4:
             x = fl0 + fl1 + fl2 + fl3
+
+        if self.classes == 1:
+            x = torch.sigmoid(x)
+            x = torch.squeeze(x, dim=1)
+        else:
+            x = F.softmax(x, dim=1)
+        return x
+
+
+class FLRSH(nn.Module):
+    def __init__(self, feats, nc=4, classes=5, seed=1226):
+        torch.manual_seed(seed)
+        super(FLRSH, self).__init__()
+        self.nc = nc
+        self.classes = classes
+        self.train_feat = [len(f) for f in feats]
+        if nc == 2:
+            self.c0 = [f for f in feats[0] if f not in feats[1]]
+            self.c1 = [f for f in feats[1] if f not in feats[0]]
+            self.shared = [f for f in feats[0] if f in feats[1]]
+            self.loc0 = nn.Linear(len(c0), classes)
+            self.loc1 = nn.Linear(len(c1), classes)
+            self.sh = nn.Linear(len(sh), classes)
+        else:
+            raise Exception('Invalid number of inputs.')
+        self.v = torch.zeros(nc, classes).requires_grad_()  # fill-in
+        self.S = torch.zeros(nc)  # set of clients
+
+    def forward(self, x):
+
+        if len(x) == self.nc:
+            if self.nc == 2:
+                x0, x1 = x
+            elif self.nc == 4:
+                x0, x1, x2, x3 = x
+            else:
+                raise Exception('Invalid number of inputs.')
+        else:
+            tf = np.cumsum(self.train_feat)
+            if self.nc == 2:
+                x0, x1 = x[:, :tf[0]], x[:, tf[0]:tf[1]]
+            elif self.nc == 4:
+                x0, x1, x2, x3 = x[:, :tf[0]], x[:, tf[0]:tf[1]], x[:, tf[1]:tf[2]], x[:, tf[2]:]
+            else:
+                raise Exception('Invalid number of inputs.')
+
+        x0 = x0.reshape(x0.shape[0], -1)
+        fl0 = self.loc0(x0[:, :len(self.c0)]) + self.sh(x0[:, len(self.c0):]) if self.S[0] else \
+            self.v[0].repeat(x0.shape[0], 1)
+        x1 = x1.reshape(x1.shape[0], -1)
+        fl1 = self.loc1(x1[:, :len(self.c1)]) + self.sh(x1[:, len(self.c1):]) if self.S[1] else \
+            self.v[1].repeat(x1.shape[0], 1)
+
+        if self.nc == 2:
+            x = fl0 + fl1
+        elif self.nc == 4:
+            x = fl0 + fl1 + fl2 + fl3
+
         if self.classes == 1:
             x = torch.sigmoid(x)
             x = torch.squeeze(x, dim=1)
