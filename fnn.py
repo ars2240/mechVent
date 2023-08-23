@@ -172,9 +172,10 @@ class FLRSH(nn.Module):
             self.c0 = [f for f in feats[0] if f not in feats[1]]
             self.c1 = [f for f in feats[1] if f not in feats[0]]
             self.shared = [f for f in feats[0] if f in feats[1]]
-            self.loc0 = nn.Linear(len(c0), classes)
-            self.loc1 = nn.Linear(len(c1), classes)
-            self.sh = nn.Linear(len(sh), classes)
+            self.c0l, self.c1l, self.shl = len(self.c0), len(self.c1), len(self.shared)
+            self.loc0 = nn.Linear(self.c0l, classes)
+            self.loc1 = nn.Linear(self.c1l, classes)
+            self.sh = nn.Linear(self.shl, classes)
         else:
             raise Exception('Invalid number of inputs.')
         self.v = torch.zeros(nc, classes).requires_grad_()  # fill-in
@@ -199,11 +200,9 @@ class FLRSH(nn.Module):
                 raise Exception('Invalid number of inputs.')
 
         x0 = x0.reshape(x0.shape[0], -1)
-        fl0 = self.loc0(x0[:, :len(self.c0)]) + self.sh(x0[:, len(self.c0):]) if self.S[0] else \
-            self.v[0].repeat(x0.shape[0], 1)
+        fl0 = self.loc0(x0[:, :self.c0l]) + self.sh(x0[:, self.c0l:]) if self.S[0] else self.v[0].repeat(x0.shape[0], 1)
         x1 = x1.reshape(x1.shape[0], -1)
-        fl1 = self.loc1(x1[:, :len(self.c1)]) + self.sh(x1[:, len(self.c1):]) if self.S[1] else \
-            self.v[1].repeat(x1.shape[0], 1)
+        fl1 = self.loc1(x1[:, :self.c1l]) + self.sh(x1[:, self.c1l:]) if self.S[1] else self.v[1].repeat(x1.shape[0], 1)
 
         if self.nc == 2:
             x = fl0 + fl1

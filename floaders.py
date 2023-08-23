@@ -219,12 +219,15 @@ def forest_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size
     return train_loader, valid_loader, test_loader
 
 
-def adv_forest_loader(batch_size=1, num_workers=0, pin_memory=True, split=14, head='advLogReg', adv_valid=True,
+def adv_forest_loader(batch_size=1, num_workers=0, pin_memory=True, split=None, head='advLogReg', adv_valid=True,
                       u='https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz',
                       c0=[*range(0, 6), 9, *range(14, 54)], c1=[*range(6, 9), *range(10, 54)], random_seed=1226,
                       test_size=0.2, valid_size=0.2):
 
     check_folder('./data/')
+
+    if split is None:
+        split = len(c0)
 
     # import data
     X = np.genfromtxt('./data/' + head + '.csv', delimiter=',')

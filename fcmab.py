@@ -63,6 +63,7 @@ class fcmab(object):
         self.m = m  # type of reward function
         self.ab = ab  # type of alpha/beta update
         self.verbose = verbose  # if extra print statements are used
+        self.best_models = {}  # best models
 
     def train(self, train_loader, val_loader, test_loader):
         check_folder('./logs')
@@ -234,6 +235,10 @@ class fcmab(object):
                 best_iter = i
                 print('new high!')
 
+            str_s = str(self.model.S)
+            if str_s not in self.best_models.keys() or self.best_models[str_s] < val_acc:
+                self.best_models[str_s] = val_acc
+
             # compute rewards
             if self.m == 0:
                 m = val_acc/100
@@ -285,6 +290,7 @@ class fcmab(object):
         if self.keep_best:
             print('Best iteration: {0}'.format(best_iter))
             self.load(head=self.head + '_best')
+        print(self.best_models)
 
         if self.verbose:
             print(self.model.S)
