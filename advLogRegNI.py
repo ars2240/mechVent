@@ -9,11 +9,11 @@ from warnings import simplefilter
 from sklearn.exceptions import ConvergenceWarning
 simplefilter("ignore", category=ConvergenceWarning)
 
-c0 = [1, 14, *range(41, 107)]
+c0 = []
 print('client 0: {0}'.format(c0))
-c1 = [8, 30, *range(107, 118)]
+c1 = []
 print('client 1: {0}'.format(c1))
-shared = [33]
+shared = [1, 8, 14, 30, 33, *range(41, 118)]
 print('shared: {0}'.format(shared))
 fl = 'none'  # none, horizontal, or vertical
 adv_valid = False
@@ -22,15 +22,18 @@ epochs = 1
 inner = 100
 fill = 0
 test_size, valid_size = 0.2, 0.2
-random_seed = 1226
+state = 1226
 model = LogisticRegression(max_iter=inner)
 modelC = LogisticRegression(max_iter=inner)
-head = 'NIShare1'
+head = 'NIShare7'
 adv_opt = 'adam'
 adv_beta = (0.9, 0.999)
 adv_eps = 1e-8
 alpha = 0.001
 classes = 2
+
+np.random.seed(state)
+torch.manual_seed(state)
 
 
 """
@@ -135,9 +138,8 @@ if rand_init and fl.lower() != 'horizontal':
 def adversary(model, X, y, j):
     w = model.coef_
     b = model.intercept_
-    y = enc.transform(y.reshape(-1, 1)).toarray()
     e = np.minimum(np.inner(X, w)+b, 709)
-    grad = -np.matmul(y/(1+np.exp(e)), w)
+    grad = -np.matmul(y.reshape(-1, 1)/(1+np.exp(e)), w)
     if fl.lower() == 'horizontal':
         st = int(X.shape[0] / 2)
         X[:st, shared] += alpha * grad[:st, shared]
@@ -149,9 +151,8 @@ def adversary(model, X, y, j):
 def adversary_adam(model, X, y, j, m, v):
     w = model.coef_
     b = model.intercept_
-    y = enc.transform(y.reshape(-1, 1)).toarray()
     e = np.minimum(np.inner(X, w)+b, 709)
-    grad = -np.matmul(y/(1+np.exp(e)), w)
+    grad = -np.matmul(y.reshape(-1, 1)/(1+np.exp(e)), w)
     m = adv_beta[0] * m + (1 - adv_beta[0]) * grad
     v = adv_beta[1] * v + (1 - adv_beta[1]) * grad ** 2
     mhat = m / (1.0 - adv_beta[0] ** (j + 1))
@@ -213,6 +214,7 @@ if fl.lower() == 'none':
     X_valid = np.concatenate((X_valid, X_ag_valid), axis=1)
     X_test = np.concatenate((X_test, X_ag_test), axis=1)
 
+"""
 check_folder('./data')
 np.savetxt("./data/" + head + ".csv", X, delimiter=",")
 np.savetxt("./data/" + head + "_valid.csv", X_valid, delimiter=",")
@@ -220,6 +222,7 @@ np.savetxt("./data/" + head + "_test.csv", X_test, delimiter=",")
 np.savetxt("./data/" + head + "_y.csv", y, delimiter=",")
 np.savetxt("./data/" + head + "_y_valid.csv", y_valid, delimiter=",")
 np.savetxt("./data/" + head + "_y_test.csv", y_test, delimiter=",")
+"""
 
 if fl.lower() == 'none':
     X_best = np.concatenate((X_best, X_ag), axis=1)

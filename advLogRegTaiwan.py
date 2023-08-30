@@ -101,9 +101,8 @@ if rand_init and fl.lower() != 'horizontal':
 def adversary(model, X, y, j):
     w = model.coef_
     b = model.intercept_
-    y = enc.transform(y.reshape(-1, 1)).toarray()
     e = np.minimum(np.inner(X, w)+b, 709)
-    grad = -np.matmul(y/(1+np.exp(e)), w)
+    grad = -np.matmul(y.reshape(-1, 1)/(1+np.exp(e)), w)
     if fl.lower() == 'horizontal':
         st = int(X.shape[0] / 2)
         X[:st, shared] += alpha * grad[:st, shared]
@@ -115,9 +114,8 @@ def adversary(model, X, y, j):
 def adversary_adam(model, X, y, j, m, v):
     w = model.coef_
     b = model.intercept_
-    y = enc.transform(y.reshape(-1, 1)).toarray()
     e = np.minimum(np.inner(X, w)+b, 709)
-    grad = -np.matmul(y/(1+np.exp(e)), w)
+    grad = -np.matmul(y.reshape(-1, 1)/(1+np.exp(e)), w)
     m = adv_beta[0] * m + (1 - adv_beta[0]) * grad
     v = adv_beta[1] * v + (1 - adv_beta[1]) * grad ** 2
     mhat = m / (1.0 - adv_beta[0] ** (j + 1))

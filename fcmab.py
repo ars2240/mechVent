@@ -4,6 +4,7 @@ import numpy as np
 import os
 from sklearn.metrics import confusion_matrix
 import sys
+import time
 import torch
 import torch.utils.data as utils_data
 
@@ -26,6 +27,14 @@ def dot(a, b):
         return np.matmul(a, b)
     else:
         raise Exception('Bad dot product.')
+
+
+def timeHMS(t, head=''):
+    hrs = np.floor(t / 3600)
+    t = t - hrs * 3600
+    mins = np.floor(t / 60)
+    secs = t - mins * 60
+    print(head + 'Time elapsed: %2i hrs, %2i min, %4.2f sec' % (hrs, mins, secs))
 
 
 class fcmab(object):
@@ -66,6 +75,9 @@ class fcmab(object):
         self.best_models = {}  # best models
 
     def train(self, train_loader, val_loader, test_loader):
+
+        start = time.time()
+
         check_folder('./logs')
         check_folder('./models')
 
@@ -285,6 +297,9 @@ class fcmab(object):
         old_stdout = sys.stdout  # save old output
         log_file = open('./logs/' + self.head + '.log', 'a')  # open log file
         sys.stdout = log_file  # write to log file
+
+        stop = time.time() - start
+        timeHMS(stop)
 
         print('Results:')
         if self.keep_best:
