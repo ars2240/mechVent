@@ -97,9 +97,9 @@ X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=va
 # normalize data
 scaler = StandardScaler()
 scaler.fit(X)
-X = scaler.transform(X)
-X_valid = scaler.transform(X_valid)
-X_test = scaler.transform(X_test)
+X = scaler.transform(X).astype('half')
+X_valid = scaler.transform(X_valid).astype('half')
+X_test = scaler.transform(X_test).astype('half')
 
 
 def horizontalize(X):
@@ -169,7 +169,7 @@ def adversary_adam(model, X, y, j, m, v):
 loss, lossH, lossC = [], [], []
 best_acc = 1
 best_model = None
-X_best, X_valid_best, X_test_best = X.copy(), X_valid.copy(), X_test.copy()
+X_best, X_valid_best, X_test_best = X.copy().astype('half'), X_valid.copy().astype('half'), X_test.copy().astype('half')
 m, v, m_valid, v_valid, m_test, v_test = 0, 0, 0, 0, 0, 0
 for i in range(epochs):
     model.fit(X, y)
@@ -191,7 +191,7 @@ for i in range(epochs):
     if l < best_acc:
         best_acc = l
         best_model = model
-        X_best, X_valid_best, X_test_best = X.copy(), X_valid.copy(), X_test.copy()
+        X_best, X_valid_best, X_test_best = X.copy().astype('half'), X_valid.copy().astype('half'), X_test.copy().astype('half')
     loss.append(l)
     if fl.lower() == 'none':
         modelC.fit(np.concatenate((X, X_ag), axis=1), y)

@@ -188,6 +188,10 @@ def forest_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size
     X_valid = scaler.transform(X_valid)
     X_test = scaler.transform(X_test)
 
+    # print('Train counts: {0}'.format({item: list(y).count(item)/len(y) for item in y}))
+    # print('Valid counts: {0}'.format({item: list(y_valid).count(item)/len(y_valid) for item in y_valid}))
+    # print('Test counts: {0}'.format({item: list(y_test).count(item)/len(y_test) for item in y_test}))
+
     # convert data-types
     X = torch.from_numpy(X).float()
     y = torch.from_numpy(y).long()

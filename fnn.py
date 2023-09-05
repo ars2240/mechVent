@@ -217,6 +217,66 @@ class FLRSH(nn.Module):
         return x
 
 
+class FLNSH(nn.Module):
+    def __init__(self, feats, nc=4, hidden=[5, 5], classes=5, seed=1226):
+        torch.manual_seed(seed)
+        super(FLNSH, self).__init__()
+        self.nc = nc
+        self.classes = classes
+        self.train_feat = [len(f) for f in feats]
+        if nc == 2:
+            self.c0 = [f for f in feats[0] if f not in feats[1]]
+            self.c1 = [f for f in feats[1] if f not in feats[0]]
+            self.shared = [f for f in feats[0] if f in feats[1]]
+            self.c0l, self.c1l, self.shl = len(self.c0), len(self.c1), len(self.shared)
+            self.loc00 = nn.Linear(self.c0l, hidden[0])
+            self.loc10 = nn.Linear(self.c1l, hidden[0])
+            self.sh0 = nn.Linear(self.shl, hidden[1])
+            self.loc01 = nn.Linear(hidden[0], classes)
+            self.loc11 = nn.Linear(hidden[0], classes)
+            self.sh1 = nn.Linear(hidden[1], classes)
+        else:
+            raise Exception('Invalid number of inputs.')
+        self.v = torch.zeros(nc, classes).requires_grad_()  # fill-in
+        self.S = torch.zeros(nc)  # set of clients
+
+    def forward(self, x):
+
+        if len(x) == self.nc:
+            if self.nc == 2:
+                x0, x1 = x
+            elif self.nc == 4:
+                x0, x1, x2, x3 = x
+            else:
+                raise Exception('Invalid number of inputs.')
+        else:
+            tf = np.cumsum(self.train_feat)
+            if self.nc == 2:
+                x0, x1 = x[:, :tf[0]], x[:, tf[0]:tf[1]]
+            elif self.nc == 4:
+                x0, x1, x2, x3 = x[:, :tf[0]], x[:, tf[0]:tf[1]], x[:, tf[1]:tf[2]], x[:, tf[2]:]
+            else:
+                raise Exception('Invalid number of inputs.')
+
+        x0, x1 = x0.reshape(x0.shape[0], -1), x1.reshape(x1.shape[0], -1)
+        fl0, fl1 = F.relu(self.loc00(x0[:, :self.c0l])), F.relu(self.loc10(x1[:, :self.c1l]))
+        loc0, loc1 = F.relu(self.sh0(x0[:, self.c0l:])), F.relu(self.sh0(x1[:, self.c1l:]))
+        fl0 = self.loc01(fl0) + self.sh1(loc0) if self.S[0] else self.v[0].repeat(x0.shape[0], 1)
+        fl1 = self.loc11(fl1) + self.sh1(loc1) if self.S[1] else self.v[1].repeat(x1.shape[0], 1)
+
+        if self.nc == 2:
+            x = fl0 + fl1
+        elif self.nc == 4:
+            x = fl0 + fl1 + fl2 + fl3
+
+        if self.classes == 1:
+            x = torch.sigmoid(x)
+            x = torch.squeeze(x, dim=1)
+        else:
+            x = F.softmax(x, dim=1)
+        return x
+
+
 class MyDenseNet121(nn.Module):
     def __init__(self, classCount=10, isTrained=True):
         super(MyDenseNet121, self).__init__()
