@@ -12,7 +12,7 @@ simplefilter("ignore", category=ConvergenceWarning)
 # c0 = [1, 2, 6, 8, *range(10, 14)]
 # c0 = [1, 6, 8]
 # c0 = [6]
-c0 = []
+c0 = [*range(0, 54)]
 print('client 0: {0}'.format(c0))
 # c1 = [4, 5, 9, *range(14, 54)]
 # c1 = [4, 5, 9]
@@ -31,7 +31,7 @@ test_size, valid_size = 0.2, 0.2
 random_seed = 1226
 model = LogisticRegression(max_iter=inner)
 modelC = LogisticRegression(max_iter=inner)
-head = 'advLogReg2AdamRandInitShare12'
+head = 'advLogReg2AdamRandInitShare0'
 adv_opt = 'adam'
 adv_beta = (0.9, 0.999)
 adv_eps = 1e-8
@@ -170,6 +170,10 @@ for i in range(epochs):
         modelC.fit(np.concatenate((X, X_ag), axis=1), y)
         lc = modelC.score(np.concatenate((X_valid, X_ag_valid), axis=1), y_valid)
         lossC.append(lc)
+
+print('Train Accuracy: {0}'.format(best_model.score(X, y)))
+print('Valid Accuracy: {0}'.format(best_acc))
+print('Test Accuracy: {0}'.format(best_model.score(X_test, y_test)))
 
 check_folder('./logs')
 np.savetxt("./logs/" + head + "_coef.csv", model.coef_, delimiter=",")

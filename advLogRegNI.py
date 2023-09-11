@@ -9,14 +9,14 @@ from warnings import simplefilter
 from sklearn.exceptions import ConvergenceWarning
 simplefilter("ignore", category=ConvergenceWarning)
 
-c0 = []
+c0 = [37]
 print('client 0: {0}'.format(c0))
-c1 = []
+c1 = [21]
 print('client 1: {0}'.format(c1))
-shared = [1, 8, 14, 30, 33, *range(41, 118)]
+shared = [0, 5, 19, 26, 40]
 print('shared: {0}'.format(shared))
 fl = 'none'  # none, horizontal, or vertical
-adv_valid = False
+adv_valid = True
 rand_init = True
 epochs = 1
 inner = 100
@@ -25,7 +25,7 @@ test_size, valid_size = 0.2, 0.2
 state = 1226
 model = LogisticRegression(max_iter=inner)
 modelC = LogisticRegression(max_iter=inner)
-head = 'NIShare7'
+head = 'NIShare5_3G4B'
 adv_opt = 'adam'
 adv_beta = (0.9, 0.999)
 adv_eps = 1e-8
@@ -197,6 +197,11 @@ for i in range(epochs):
         modelC.fit(np.concatenate((X, X_ag), axis=1), y)
         lc = modelC.score(np.concatenate((X_valid, X_ag_valid), axis=1), y_valid)
         lossC.append(lc)
+
+
+print('Train Accuracy: {0}'.format(best_model.score(X, y)))
+print('Valid Accuracy: {0}'.format(best_acc))
+print('Test Accuracy: {0}'.format(best_model.score(X_test, y_test)))
 
 check_folder('./logs')
 np.savetxt("./logs/" + head + "_coef.csv", model.coef_, delimiter=",")

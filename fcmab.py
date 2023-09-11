@@ -410,6 +410,9 @@ class fcmab(object):
         if self.nc == 2:
             x0, x1, y = data
             X = x0, x1
+        elif self.nc == 3:
+            x0, x1, x2, y = data
+            X = x0, x1, x2
         elif self.nc == 4:
             x0, x1, x2, x3, y = data
             X = x0, x1, x2, x3
@@ -492,6 +495,8 @@ class fcmab(object):
 
                 if self.nc == 2:
                     x0, x1, y = data
+                elif self.nc == 3:
+                    x0, x1, x2, y = data
                 elif self.nc == 4:
                     x0, x1, x2, x3, y = data
                 else:
@@ -558,6 +563,8 @@ class fcmab(object):
 
                 if self.nc == 2:
                     nd.append(utils_data.TensorDataset(x0, x1, y))
+                elif self.nc == 3:
+                    nd.append(utils_data.TensorDataset(x0, x1, x2, y))
                 elif self.nc == 4:
                     nd.append(utils_data.TensorDataset(x0, x1, x2, x3, y))
 

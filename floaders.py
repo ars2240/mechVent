@@ -163,8 +163,9 @@ def cifar_loader(root='./data', batch_size=1, seed=1226, valid_size=0.2, shuffle
 
 
 def forest_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
-                  u='https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz', std=1,
-                  c0=[*range(0, 6), 9, *range(14, 54)], c1=[*range(6, 9), *range(10, 54)], adv=[], adv_valid=True):
+                  u='https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz', std=1, nc=2,
+                  c0=[*range(0, 6), 9, *range(14, 54)], c1=[*range(6, 9), *range(10, 54)], c2=[], c3=[], adv=[],
+                  adv_valid=True):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
@@ -200,18 +201,44 @@ def forest_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size
     X_valid = torch.from_numpy(X_valid).float()
     y_valid = torch.from_numpy(y_valid).long()
 
-    x1, x2 = X[:, c0], X[:, c1]
+    if nc == 2:
+        x0, x1 = X[:, c0], X[:, c1]
+    elif nc == 3:
+        x0, x1, x2 = X[:, c0], X[:, c1], X[:, c2]
+    elif nc == 4:
+        x0, x1, x2, x3 = X[:, c0], X[:, c1], X[:, c2], X[:, c3]
+    else:
+        raise Exception('Number of clients not implemented.')
     if len(adv) > 0:
-        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
-    train_data = utils_data.TensorDataset(x1, x2, y)
-    x1, x2 = X_valid[:, c0], X_valid[:, c1]
+        x0[:, adv] += torch.normal(mean=0, std=std, size=(x0.shape[0], len(adv)))
+    if nc == 2:
+        train_data = utils_data.TensorDataset(x0, x1, y)
+        x0, x1 = X_valid[:, c0], X_valid[:, c1]
+    elif nc == 3:
+        train_data = utils_data.TensorDataset(x0, x1, x2, y)
+        x0, x1, x2 = X_valid[:, c0], X_valid[:, c1], X_valid[:, c2]
+    elif nc == 4:
+        train_data = utils_data.TensorDataset(x0, x1, x2, x3, y)
+        x0, x1, x2, x3 = X_valid[:, c0], X_valid[:, c1], X_valid[:, c2], X_valid[:, c3]
+    if len(adv) > 0 and adv_valid:
+        x1[:, adv] += torch.normal(mean=0, std=std, size=(x0.shape[0], len(adv)))
+    if nc == 2:
+        valid_data = utils_data.TensorDataset(x0, x1, y_valid)
+        x0, x1 = X_test[:, c0], X_test[:, c1]
+    elif nc == 3:
+        valid_data = utils_data.TensorDataset(x0, x1, x2, y_valid)
+        x0, x1, x2 = X_test[:, c0], X_test[:, c1], X_test[:, c2]
+    elif nc == 4:
+        valid_data = utils_data.TensorDataset(x0, x1, x2, x3, y_valid)
+        x0, x1, x2, x3 = X_test[:, c0], X_test[:, c1], X_test[:, c2], X_test[:, c3]
     if len(adv) > 0 and adv_valid:
         x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
-    valid_data = utils_data.TensorDataset(x1, x2, y_valid)
-    x1, x2 = X_test[:, c0], X_test[:, c1]
-    if len(adv) > 0 and adv_valid:
-        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
-    test_data = utils_data.TensorDataset(x1, x2, y_test)
+    if nc == 2:
+        test_data = utils_data.TensorDataset(x0, x1, y_test)
+    elif nc == 3:
+        test_data = utils_data.TensorDataset(x0, x1, x2, y_test)
+    elif nc == 4:
+        test_data = utils_data.TensorDataset(x0, x1, x2, x3, y_test)
 
     train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
                                          pin_memory=pin_memory)
