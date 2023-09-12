@@ -9,11 +9,11 @@ from warnings import simplefilter
 from sklearn.exceptions import ConvergenceWarning
 simplefilter("ignore", category=ConvergenceWarning)
 
-c0 = [37]
+c0 = [5, 37]
 print('client 0: {0}'.format(c0))
-c1 = [21]
+c1 = [21, 26]
 print('client 1: {0}'.format(c1))
-shared = [0, 5, 19, 26, 40]
+shared = [0, 19, 40]
 print('shared: {0}'.format(shared))
 fl = 'none'  # none, horizontal, or vertical
 adv_valid = True
@@ -25,7 +25,7 @@ test_size, valid_size = 0.2, 0.2
 state = 1226
 model = LogisticRegression(max_iter=inner)
 modelC = LogisticRegression(max_iter=inner)
-head = 'NIShare5_3G4B'
+head = 'NIShare3_3G4B'
 adv_opt = 'adam'
 adv_beta = (0.9, 0.999)
 adv_eps = 1e-8

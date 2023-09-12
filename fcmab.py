@@ -197,9 +197,18 @@ class fcmab(object):
                 for j, data in enumerate(train_loader):
 
                     if j == 0 and epoch == 0 and self.verbose:
-                        x0, x1, y = data
+                        if self.nc == 2:
+                            x0, x1, y = data
+                        elif self.nc == 3:
+                            x0, x1, x2, y = data
+                        elif self.nc == 4:
+                            x0, x1, x2, x3, y = data
                         print('x0: {0}'.format(x0))
                         print('x1: {0}'.format(x1))
+                        if self.nc >= 3:
+                            print('x2: {0}'.format(x2))
+                        if self.nc >= 4:
+                            print('x3: {0}'.format(x3))
                         print('y: {0}'.format(y))
 
                     _, l, _ = self.model_loss(data)

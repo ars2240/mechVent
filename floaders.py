@@ -221,7 +221,7 @@ def forest_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size
         train_data = utils_data.TensorDataset(x0, x1, x2, x3, y)
         x0, x1, x2, x3 = X_valid[:, c0], X_valid[:, c1], X_valid[:, c2], X_valid[:, c3]
     if len(adv) > 0 and adv_valid:
-        x1[:, adv] += torch.normal(mean=0, std=std, size=(x0.shape[0], len(adv)))
+        x0[:, adv] += torch.normal(mean=0, std=std, size=(x0.shape[0], len(adv)))
     if nc == 2:
         valid_data = utils_data.TensorDataset(x0, x1, y_valid)
         x0, x1 = X_test[:, c0], X_test[:, c1]
@@ -232,7 +232,7 @@ def forest_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size
         valid_data = utils_data.TensorDataset(x0, x1, x2, x3, y_valid)
         x0, x1, x2, x3 = X_test[:, c0], X_test[:, c1], X_test[:, c2], X_test[:, c3]
     if len(adv) > 0 and adv_valid:
-        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
+        x0[:, adv] += torch.normal(mean=0, std=std, size=(x0.shape[0], len(adv)))
     if nc == 2:
         test_data = utils_data.TensorDataset(x0, x1, y_test)
     elif nc == 3:
