@@ -9,13 +9,14 @@ from warnings import simplefilter
 from sklearn.exceptions import ConvergenceWarning
 simplefilter("ignore", category=ConvergenceWarning)
 
-c0 = [5, 37]
+c0 = [0, 1, 6, 7, 14, 16, 17, 19, 25, 26, 27, 30, 31, 32, 33, 34, 35, 36, 37, *range(38, 41)]
 print('client 0: {0}'.format(c0))
-c1 = [21, 26]
+c1 = [2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 15, 18, 20, 21, 23, 24, 28, 29, *range(41, 122)]
 print('client 1: {0}'.format(c1))
-shared = [0, 19, 40]
+shared = [x for x in range(0, 122) if x not in c0 and x not in c1]
 print('shared: {0}'.format(shared))
 fl = 'none'  # none, horizontal, or vertical
+plus = True
 adv_valid = True
 rand_init = True
 epochs = 1
@@ -25,7 +26,7 @@ test_size, valid_size = 0.2, 0.2
 state = 1226
 model = LogisticRegression(max_iter=inner)
 modelC = LogisticRegression(max_iter=inner)
-head = 'NIShare3_3G4B'
+head = 'NI+Share1'
 adv_opt = 'adam'
 adv_beta = (0.9, 0.999)
 adv_eps = 1e-8
@@ -48,19 +49,32 @@ if fl.lower() == 'vertical':
     c1.extend(shared)
 
 # Load Data
-u = 'http://kdd.ics.uci.edu/databases/kddcup99/kddcup.data.gz'
-filename2 = download(u)
-u = 'http://kdd.ics.uci.edu/databases/kddcup99/corrected.gz'
-filename3 = download(u)
+if plus:
+    filename2 = './data/NSL-KDD/KDDTrain+.txt'
+    filename3 = './data/NSL-KDD/KDDTest+.txt'
+else:
+    u = 'http://kdd.ics.uci.edu/databases/kddcup99/kddcup.data.gz'
+    filename2 = download(u)
+    u = 'http://kdd.ics.uci.edu/databases/kddcup99/corrected.gz'
+    filename3 = download(u)
 
 # import dataset
 train = pd.read_csv(filename2, header=None)
 test = pd.read_csv(filename3, header=None)
 
+if plus:
+    train.drop(columns=train.columns[-1], axis=1, inplace=True)
+    test.drop(columns=test.columns[-1], axis=1, inplace=True)
+
 # transform to supercategories
+i = train.shape[1] - 1
 if classes == 2:
+    """
     dic = {'normal.': 'normal', 'land.': 'dos', 'pod.': 'dos', 'teardrop.': 'dos', 'back.': 'dos',
            'neptune.': 'dos', 'smurf.': 'dos'}
+    """
+    dic = {key: 'attack' for key in train[i].unique()}
+    dic['normal'] = 'normal'
 elif classes == 5:
     dic = {'normal.': 'normal', 'nmap.': 'probing', 'portsweep.': 'probing', 'ipsweep.': 'probing',
            'satan.': 'probing', 'land.': 'dos', 'pod.': 'dos', 'teardrop.': 'dos', 'back.': 'dos',
@@ -69,7 +83,6 @@ elif classes == 5:
            'buffer_overflow.': 'u2r', 'rootkit.': 'u2r', 'loadmodule.': 'u2r', 'perl.': 'u2r'}
 else:
     raise Exception('Invalid number of classes')
-i = train.shape[1] - 1
 train = train.loc[train[i].isin(dic.keys())]
 train.replace({i: dic}, inplace=True)
 test = test.loc[test[i].isin(dic.keys())]
@@ -94,12 +107,18 @@ X_test = X_test.reshape((test.shape[0], train_feat))
 
 X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
 
+"""
+print('Train classes: {0}'.format(np.sum(y)/len(y)))
+print('Valid classes: {0}'.format(np.sum(y_valid)/len(y_valid)))
+print('Test classes: {0}'.format(np.sum(y_test)/len(y_test)))
+"""
+
 # normalize data
 scaler = StandardScaler()
 scaler.fit(X)
-X = scaler.transform(X).astype('half')
-X_valid = scaler.transform(X_valid).astype('half')
-X_test = scaler.transform(X_test).astype('half')
+X = scaler.transform(X)
+X_valid = scaler.transform(X_valid)
+X_test = scaler.transform(X_test)
 
 
 def horizontalize(X):
@@ -169,7 +188,7 @@ def adversary_adam(model, X, y, j, m, v):
 loss, lossH, lossC = [], [], []
 best_acc = 1
 best_model = None
-X_best, X_valid_best, X_test_best = X.copy().astype('half'), X_valid.copy().astype('half'), X_test.copy().astype('half')
+X_best, X_valid_best, X_test_best = X.copy(), X_valid.copy(), X_test.copy()
 m, v, m_valid, v_valid, m_test, v_test = 0, 0, 0, 0, 0, 0
 for i in range(epochs):
     model.fit(X, y)
@@ -191,7 +210,7 @@ for i in range(epochs):
     if l < best_acc:
         best_acc = l
         best_model = model
-        X_best, X_valid_best, X_test_best = X.copy().astype('half'), X_valid.copy().astype('half'), X_test.copy().astype('half')
+        X_best, X_valid_best, X_test_best = X.copy(), X_valid.copy(), X_test.copy()
     loss.append(l)
     if fl.lower() == 'none':
         modelC.fit(np.concatenate((X, X_ag), axis=1), y)

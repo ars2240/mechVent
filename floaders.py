@@ -384,25 +384,39 @@ with open('ni_cols_orig.txt', 'r') as f:
     cols_orig = f.read().split('\n')
 
 
-def ni_loader(batch_size=1, seed=1226, state=1226, valid_size=0.2, num_workers=0, pin_memory=True, std=1,
-              c0=[], c1=[], adv=[], adv_valid=True, classes=2):
+def ni_loader(batch_size=1, seed=1226, state=1226, train_size=1, valid_size=0.2, num_workers=0, pin_memory=True, std=1,
+              c0=[], c1=[], adv=[], adv_valid=True, classes=2, plus=True):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
     # Load Data
-    u = 'http://kdd.ics.uci.edu/databases/kddcup99/kddcup.data.gz'
-    filename2 = download(u)
-    u = 'http://kdd.ics.uci.edu/databases/kddcup99/corrected.gz'
-    filename3 = download(u)
+    if plus:
+        filename2 = './data/NSL-KDD/KDDTrain+.txt'
+        filename3 = './data/NSL-KDD/KDDTest+.txt'
+    else:
+        u = 'http://kdd.ics.uci.edu/databases/kddcup99/kddcup.data.gz'
+        filename2 = download(u)
+        u = 'http://kdd.ics.uci.edu/databases/kddcup99/corrected.gz'
+        filename3 = download(u)
 
     # import dataset
     train = pd.read_csv(filename2, header=None)
     test = pd.read_csv(filename3, header=None)
 
-    # transform to supercategories
+    if plus:
+        train.drop(columns=train.columns[-1], axis=1, inplace=True)
+        test.drop(columns=test.columns[-1], axis=1, inplace=True)
+
+    # transform to super-categories
+    i = train.shape[1] - 1
     if classes == 2:
+        """
         dic = {'normal.': 'normal', 'land.': 'dos', 'pod.': 'dos', 'teardrop.': 'dos', 'back.': 'dos',
                'neptune.': 'dos', 'smurf.': 'dos'}
+        """
+        dic = {key: 'attack' for key in train[i].unique()}
+        dic['normal'] = 'normal'
+        print(dic)
     elif classes == 5:
         dic = {'normal.': 'normal', 'nmap.': 'probing', 'portsweep.': 'probing', 'ipsweep.': 'probing',
                'satan.': 'probing', 'land.': 'dos', 'pod.': 'dos', 'teardrop.': 'dos', 'back.': 'dos',
@@ -411,7 +425,6 @@ def ni_loader(batch_size=1, seed=1226, state=1226, valid_size=0.2, num_workers=0
                'buffer_overflow.': 'u2r', 'rootkit.': 'u2r', 'loadmodule.': 'u2r', 'perl.': 'u2r'}
     else:
         raise Exception('Invalid number of classes')
-    i = train.shape[1] - 1
     train = train.loc[train[i].isin(dic.keys())]
     train.replace({i: dic}, inplace=True)
     test = test.loc[test[i].isin(dic.keys())]
@@ -434,6 +447,8 @@ def ni_loader(batch_size=1, seed=1226, state=1226, valid_size=0.2, num_workers=0
     X = X.reshape((train_len, train_feat))
     X_test = X_test.reshape((test.shape[0], train_feat))
 
+    if train_size < 1:
+        X, _, y, _ = train_test_split(np.array(X), np.array(y), test_size=train_size, random_state=state)
     X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
 
     # normalize data
