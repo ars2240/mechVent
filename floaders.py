@@ -487,3 +487,83 @@ def ni_loader(batch_size=1, seed=1226, state=1226, train_size=1, valid_size=0.2,
                                         pin_memory=pin_memory)
 
     return train_loader, valid_loader, test_loader
+
+
+def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
+               std=1, undersample=None, c0=[], c1=[], adv=[], adv_valid=True):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    # Load Data
+    filename = './data/IBM.csv'
+
+    # import dataset
+    df = pd.read_csv(filename, header=None)
+    df.drop(columns=df.columns[0], axis=1, inplace=True)
+    print(df.shape)
+
+    # undersample dominant class
+    ccol = df.columns[-1]
+    if undersample is not None:
+        df_0 = df[~df[ccol]]
+        df_1 = df[df[ccol]]
+        df_0_under = df_0.sample(undersample * df_1.shape[0], random_state=seed)
+        df = pd.concat([df_0_under, df_1], axis=0)
+        print(df.shape)
+
+    # one-hot encode categorical variables
+    nunique = np.array(df.nunique())
+    cols = np.where(np.logical_and(2 < nunique, nunique < 10))[0]
+    df = pd.get_dummies(df, columns=df.columns[cols])  # convert objects to one-hot encoding
+    print(df.shape)
+
+    """
+    for col in df.columns:
+        print(col)
+    """
+
+    # split classes & features
+    df[ccol] = df[ccol].replace({True: 1, False: 0})
+    X = df.values[:, :-1]
+    y = df.values[:, -1]
+    print(X.shape)
+
+    X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=state)
+    X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
+
+    # normalize data
+    scaler = StandardScaler()
+    scaler.fit(X)
+    X = scaler.transform(X)
+    X_valid = scaler.transform(X_valid)
+    X_test = scaler.transform(X_test)
+
+    # convert data-types
+    X = torch.from_numpy(X).float()
+    y = torch.from_numpy(y).long()
+    X_test = torch.from_numpy(X_test).float()
+    y_test = torch.from_numpy(y_test).long()
+    X_valid = torch.from_numpy(X_valid).float()
+    y_valid = torch.from_numpy(y_valid).long()
+
+    x1, x2 = X[:, c0], X[:, c1]
+    if len(adv) > 0:
+        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
+    train_data = utils_data.TensorDataset(x1, x2, y)
+    x1, x2 = X_valid[:, c0], X_valid[:, c1]
+    if len(adv) > 0 and adv_valid:
+        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
+    valid_data = utils_data.TensorDataset(x1, x2, y_valid)
+    x1, x2 = X_test[:, c0], X_test[:, c1]
+    if len(adv) > 0 and adv_valid:
+        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
+    test_data = utils_data.TensorDataset(x1, x2, y_test)
+
+    train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
+                                         pin_memory=pin_memory)
+    valid_loader = utils_data.DataLoader(valid_data, batch_size=batch_size, num_workers=num_workers,
+                                         pin_memory=pin_memory)
+    test_loader = utils_data.DataLoader(test_data, batch_size=batch_size, num_workers=num_workers,
+                                        pin_memory=pin_memory)
+
+    return train_loader, valid_loader, test_loader
