@@ -510,23 +510,25 @@ def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.
         df_0_under = df_0.sample(undersample * df_1.shape[0], random_state=seed)
         df = pd.concat([df_0_under, df_1], axis=0)
         print(df.shape)
-
-    # one-hot encode categorical variables
-    nunique = np.array(df.nunique())
-    cols = np.where(np.logical_and(2 < nunique, nunique < 10))[0]
-    df = pd.get_dummies(df, columns=df.columns[cols])  # convert objects to one-hot encoding
-    print(df.shape)
-
-    """
-    for col in df.columns:
-        print(col)
-    """
+    df[ccol] = df[ccol].replace({True: 1, False: 0})
 
     # split classes & features
-    df[ccol] = df[ccol].replace({True: 1, False: 0})
     X = df.values[:, :-1]
     y = df.values[:, -1]
     print(X.shape)
+
+    # one-hot encode categorical variables
+    X = pd.DataFrame(X)
+    int_vals = np.array([X[col].apply(float.is_integer).all() for col in X.columns])
+    nunique = np.array(X.nunique())
+    cols = np.where(np.logical_and(np.logical_and(2 < nunique, nunique < 10), int_vals))[0]
+    X = pd.get_dummies(X, columns=X.columns[cols])  # convert objects to one-hot encoding
+    print(X.shape)
+    """
+    for col in X.columns:
+        print(col)
+    # """
+    X = X.to_numpy()
 
     X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=state)
     X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
