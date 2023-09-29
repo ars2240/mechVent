@@ -196,6 +196,12 @@ class fcmab(object):
             for epoch in range(self.epochs):
                 for j, data in enumerate(train_loader):
 
+                    if j == 0 and epoch == 0 and self.verbose:
+                        X, y = data[:-1], data[-1]
+                        for k in range(self.nc):
+                            print('x{0}: {1}'.format(k, X[k]))
+                        print('y: {0}'.format(y))
+
                     _, l, _ = self.model_loss(data)
 
                     self.opt.zero_grad()
@@ -405,7 +411,7 @@ class fcmab(object):
 
         if adversarial and self.adversarial is None:
             raise Exception("No adversarial client selected.")
-        for i in range(0, self.nc):
+        for i in range(self.nc):
             if adversarial and self.nc >= i + 1 and ((type(self.adversarial) == int and self.adversarial == i) or
                                                      (type(self.adversarial) == list and i in self.adversarial)):
                 X[i].requires_grad_()
@@ -473,7 +479,7 @@ class fcmab(object):
 
                 if self.adversarial is None:
                     raise Exception("No adversarial client selected.")
-                for i in range(0, self.nc):
+                for i in range(self.nc):
                     if self.nc >= i + 1 and ((type(self.adversarial) == int and self.adversarial == i) or
                                              (type(self.adversarial) == list and i in self.adversarial)):
                         X[i].requires_grad = False

@@ -254,7 +254,7 @@ class FLRSH2(nn.Module):
         self.shared = [f for f in feats[0] if f in feats[1]]
         self.shl = len(self.shared)
         self.sh = nn.Linear(self.shl, classes)
-        for i in range(0, nc):
+        for i in range(nc):
             self.c[i] = [f for f in feats[i] if f not in self.shared]
             self.cl[i] = len(self.c[i])
             self.loc[i] = nn.Linear(self.cl[i], classes)
@@ -267,7 +267,7 @@ class FLRSH2(nn.Module):
             raise Exception('Invalid number of inputs.')
 
         fl = [None] * self.nc
-        for i in range(0, self.nc):
+        for i in range(self.nc):
             x2 = x[i]
             s, f = x2.shape[0], self.cl[i]
             x2 = x2.reshape(s, -1)
