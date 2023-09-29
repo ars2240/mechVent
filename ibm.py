@@ -2,7 +2,7 @@ from fcmab import *
 from fnn import *
 from floaders import *
 
-sh = 1
+sh = 171  # 1, 85, 171, 255, 341
 if sh == 1:
     c0 = [*range(348, 352), 32, 69, 99, 114, 196, 286, 324, *range(352, 358), 45, 46, 58, 259, 209, 220, 312, 1, 12, 30,
           61, 83, 89, 113, 145, 232, 235, 272, 281, 300, 311, 322, 34, 49, 202, 212, 217, 233, 269, 270, 271, 287, 305,
@@ -62,12 +62,12 @@ adv = [*range(len(c0), len(c0)+len(shared))]
 c0.extend(shared)
 c1.extend(shared)
 
-tr_loader, val_loader, te_loader = ibm_loader(batch_size=128, c0=c0, c1=c1, adv=adv, adv_valid=True, undersample=4)
+tr_loader, val_loader, te_loader = ibm_loader(batch_size=128, c=[c0, c1], adv=adv, adv_valid=True, undersample=4)
 # tr_loader, val_loader, te_loader = adv_forest_loader(batch_size=128, adv_valid=True, c0=c0, c1=c1, head=head + '_best')
 # model = FLR(train_feat=[len(c0), len(c1)], nc=2, classes=7)
-model = FLRSH(feats=[c0, c1], nc=2, classes=2)
+model = FLRSH2(feats=[c0, c1], nc=2, classes=2)
 opt = torch.optim.Adam(model.parameters())
 loss = nn.CrossEntropyLoss()
 
-cmab = fcmab(model, loss, opt, nc=2, n=100, c='mabLin', head=head + '_FLRSH_RandPert', verbose=True)
+cmab = fcmab(model, loss, opt, nc=2, n=100, c='mabLin', head=head + '_FLRSH2_RandPert', verbose=True)
 cmab.train(tr_loader, val_loader, te_loader)

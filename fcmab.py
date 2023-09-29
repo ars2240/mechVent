@@ -196,21 +196,6 @@ class fcmab(object):
             for epoch in range(self.epochs):
                 for j, data in enumerate(train_loader):
 
-                    if j == 0 and epoch == 0 and self.verbose:
-                        if self.nc == 2:
-                            x0, x1, y = data
-                        elif self.nc == 3:
-                            x0, x1, x2, y = data
-                        elif self.nc == 4:
-                            x0, x1, x2, x3, y = data
-                        print('x0: {0}'.format(x0))
-                        print('x1: {0}'.format(x1))
-                        if self.nc >= 3:
-                            print('x2: {0}'.format(x2))
-                        if self.nc >= 4:
-                            print('x3: {0}'.format(x3))
-                        print('y: {0}'.format(y))
-
                     _, l, _ = self.model_loss(data)
 
                     self.opt.zero_grad()
@@ -416,32 +401,14 @@ class fcmab(object):
                 plt.close()
 
     def model_loss(self, data, adversarial=False):
-        if self.nc == 2:
-            x0, x1, y = data
-            X = x0, x1
-        elif self.nc == 3:
-            x0, x1, x2, y = data
-            X = x0, x1, x2
-        elif self.nc == 4:
-            x0, x1, x2, x3, y = data
-            X = x0, x1, x2, x3
-        else:
-            raise Exception("Number of clients not implemented.")
+        X, y = data[:-1], data[-1]
 
         if adversarial and self.adversarial is None:
             raise Exception("No adversarial client selected.")
-        if adversarial and self.nc >= 1 and ((type(self.adversarial) == int and self.adversarial == 0) or
-                                             (type(self.adversarial) == list and 0 in self.adversarial)):
-            x0.requires_grad_()
-        if adversarial and self.nc >= 2 and ((type(self.adversarial) == int and self.adversarial == 1) or
-                                             (type(self.adversarial) == list and 1 in self.adversarial)):
-            x1.requires_grad_()
-        if adversarial and self.nc >= 3 and ((type(self.adversarial) == int and self.adversarial == 2) or
-                                             (type(self.adversarial) == list and 2 in self.adversarial)):
-            x2.requires_grad_()
-        if adversarial and self.nc >= 4 and ((type(self.adversarial) == int and self.adversarial == 3) or
-                                             (type(self.adversarial) == list and 3 in self.adversarial)):
-            x3.requires_grad_()
+        for i in range(0, self.nc):
+            if adversarial and self.nc >= i + 1 and ((type(self.adversarial) == int and self.adversarial == i) or
+                                                     (type(self.adversarial) == list and i in self.adversarial)):
+                X[i].requires_grad_()
 
         out = self.model(X)
         if self.model.classes == 1:
@@ -502,80 +469,28 @@ class fcmab(object):
                 self.opt.zero_grad()
                 loss.backward()
 
-                if self.nc == 2:
-                    x0, x1, y = data
-                elif self.nc == 3:
-                    x0, x1, x2, y = data
-                elif self.nc == 4:
-                    x0, x1, x2, x3, y = data
-                else:
-                    raise Exception("Number of clients not implemented.")
+                X, y = data[:-1], data[-1]
 
                 if self.adversarial is None:
                     raise Exception("No adversarial client selected.")
-                if self.nc >= 1 and ((type(self.adversarial) == int and self.adversarial == 0) or
-                                     (type(self.adversarial) == list and 0 in self.adversarial)):
-                    x0.requires_grad = False
-                    if self.adv_opt.lower() == 'sgd':
-                        x0 += step * x0.grad
-                    elif self.adv_opt.lower() == 'adam':
-                        self.adv_m[l][0][i] = self.adv_beta[0] * self.adv_m[l][0][i] + (1-self.adv_beta[0]) * x0.grad
-                        self.adv_v[l][0][i] = self.adv_beta[1] * self.adv_v[l][0][i] + (
-                                1-self.adv_beta[1]) * x0.grad**2
-                        mhat = self.adv_m[l][0][i] / (1.0 - self.adv_beta[0]**(epoch+1))
-                        vhat = self.adv_v[l][0][i] / (1.0 - self.adv_beta[1]**(epoch+1))
-                        x0 += step * mhat / (torch.sqrt(vhat) + self.adv_eps)
-                    else:
-                        raise Exception('Unimplemented adversarial optimizer.')
-                if self.nc >= 2 and ((type(self.adversarial) == int and self.adversarial == 1) or
-                                     (type(self.adversarial) == list and 1 in self.adversarial)):
-                    x1.requires_grad = False
-                    if self.adv_opt.lower() == 'sgd':
-                        x1 += step * x1.grad
-                    elif self.adv_opt.lower() == 'adam':
-                        self.adv_m[l][1][i] = self.adv_beta[0] * self.adv_m[l][1][i] + (1 - self.adv_beta[0]) * x0.grad
-                        self.adv_v[l][1][i] = self.adv_beta[1] * self.adv_v[l][1][i] + (
-                                    1 - self.adv_beta[1]) * x0.grad ** 2
-                        mhat = self.adv_m[l][1][i] / (1.0 - self.adv_beta[0] ** (epoch + 1))
-                        vhat = self.adv_v[l][1][i] / (1.0 - self.adv_beta[1] ** (epoch + 1))
-                        x1 += step * mhat / (torch.sqrt(vhat) + self.adv_eps)
-                    else:
-                        raise Exception('Unimplemented adversarial optimizer.')
-                if self.nc >= 3 and ((type(self.adversarial) == int and self.adversarial == 2) or
-                                     (type(self.adversarial) == list and 2 in self.adversarial)):
-                    x2.requires_grad = False
-                    if self.adv_opt.lower() == 'sgd':
-                        x2 += step * x2.grad
-                    elif self.adv_opt.lower() == 'adam':
-                        self.adv_m[l][2][i] = self.adv_beta[0] * self.adv_m[l][2][i] + (1 - self.adv_beta[0]) * x0.grad
-                        self.adv_v[l][2][i] = self.adv_beta[1] * self.adv_v[l][2][i] + (
-                                1 - self.adv_beta[1]) * x0.grad ** 2
-                        mhat = self.adv_m[l][2][i] / (1.0 - self.adv_beta[0] ** (epoch + 1))
-                        vhat = self.adv_v[l][2][i] / (1.0 - self.adv_beta[1] ** (epoch + 1))
-                        x2 += step * mhat / (torch.sqrt(vhat) + self.adv_eps)
-                    else:
-                        raise Exception('Unimplemented adversarial optimizer.')
-                if self.nc >= 4 and ((type(self.adversarial) == int and self.adversarial == 3) or
-                                     (type(self.adversarial) == list and 3 in self.adversarial)):
-                    x3.requires_grad = False
-                    if self.adv_opt.lower() == 'sgd':
-                        x3 += sstep * x3.grad
-                    elif self.adv_opt.lower() == 'adam':
-                        self.adv_m[l][3][i] = self.adv_beta[0] * self.adv_m[l][3][i] + (1 - self.adv_beta[0]) * x0.grad
-                        self.adv_v[l][3][i] = self.adv_beta[1] * self.adv_v[l][3][i] + (
-                                1 - self.adv_beta[1]) * x0.grad ** 2
-                        mhat = self.adv_m[l][3][i] / (1.0 - self.adv_beta[0] ** (epoch + 1))
-                        vhat = self.adv_v[l][3][i] / (1.0 - self.adv_beta[1] ** (epoch + 1))
-                        x3 += step * mhat / (torch.sqrt(vhat) + self.adv_eps)
-                    else:
-                        raise Exception('Unimplemented adversarial optimizer.')
+                for i in range(0, self.nc):
+                    if self.nc >= i + 1 and ((type(self.adversarial) == int and self.adversarial == i) or
+                                             (type(self.adversarial) == list and i in self.adversarial)):
+                        X[i].requires_grad = False
+                        if self.adv_opt.lower() == 'sgd':
+                            X[i] += step * X[i].grad
+                        elif self.adv_opt.lower() == 'adam':
+                            self.adv_m[l][0][i] = self.adv_beta[0] * self.adv_m[l][0][i] + (
+                                        1 - self.adv_beta[0]) * X[i].grad
+                            self.adv_v[l][0][i] = self.adv_beta[1] * self.adv_v[l][0][i] + (
+                                    1 - self.adv_beta[1]) * X[i].grad ** 2
+                            mhat = self.adv_m[l][0][i] / (1.0 - self.adv_beta[0] ** (epoch + 1))
+                            vhat = self.adv_v[l][0][i] / (1.0 - self.adv_beta[1] ** (epoch + 1))
+                            X[i] += step * mhat / (torch.sqrt(vhat) + self.adv_eps)
+                        else:
+                            raise Exception('Unimplemented adversarial optimizer.')
 
-                if self.nc == 2:
-                    nd.append(utils_data.TensorDataset(x0, x1, y))
-                elif self.nc == 3:
-                    nd.append(utils_data.TensorDataset(x0, x1, x2, y))
-                elif self.nc == 4:
-                    nd.append(utils_data.TensorDataset(x0, x1, x2, x3, y))
+                nd.append(utils_data.TensorDataset(*X, y))
 
             nd = utils_data.ConcatDataset(nd)
             loader = utils_data.DataLoader(nd, batch_size=loader.batch_size, num_workers=loader.num_workers,

@@ -1,3 +1,4 @@
+import itertools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -232,6 +233,47 @@ class FLRSH(nn.Module):
             x = fl0 + fl1 + fl2
         elif self.nc == 4:
             x = fl0 + fl1 + fl2 + fl3
+
+        if self.classes == 1:
+            x = torch.sigmoid(x)
+            x = torch.squeeze(x, dim=1)
+        else:
+            x = F.softmax(x, dim=1)
+        return x
+
+
+class FLRSH2(nn.Module):
+    def __init__(self, feats, nc=4, classes=5, seed=1226):
+        torch.manual_seed(seed)
+        super(FLRSH2, self).__init__()
+
+        self.nc = nc
+        self.classes = classes
+        self.train_feat = [len(f) for f in feats]
+        self.c, self.cl, self.loc = [None] * nc, [None] * nc, [None] * nc
+        self.shared = [f for f in feats[0] if f in feats[1]]
+        self.shl = len(self.shared)
+        self.sh = nn.Linear(self.shl, classes)
+        for i in range(0, nc):
+            self.c[i] = [f for f in feats[i] if f not in self.shared]
+            self.cl[i] = len(self.c[i])
+            self.loc[i] = nn.Linear(self.cl[i], classes)
+        self.v = torch.zeros(nc, classes).requires_grad_()  # fill-in
+        self.S = torch.zeros(nc)  # set of clients
+
+    def forward(self, x):
+
+        if len(x) != self.nc:
+            raise Exception('Invalid number of inputs.')
+
+        fl = [None] * self.nc
+        for i in range(0, self.nc):
+            x2 = x[i]
+            s, f = x2.shape[0], self.cl[i]
+            x2 = x2.reshape(s, -1)
+            fl[i] = self.loc[i](x2[:, :f]) + self.sh(x2[:, f:]) if self.S[i] else self.v[i].repeat(s, 1)
+
+        x = sum(fl)
 
         if self.classes == 1:
             x = torch.sigmoid(x)

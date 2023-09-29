@@ -490,7 +490,7 @@ def ni_loader(batch_size=1, seed=1226, state=1226, train_size=1, valid_size=0.2,
 
 
 def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
-               std=1, undersample=None, c0=[], c1=[], adv=[], adv_valid=True):
+               std=1, undersample=None, c=[], adv=[], adv_valid=True):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
@@ -548,18 +548,23 @@ def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.
     X_valid = torch.from_numpy(X_valid).float()
     y_valid = torch.from_numpy(y_valid).long()
 
-    x1, x2 = X[:, c0], X[:, c1]
+    nc = len(c)
+    x = [None] * nc
+    for i in range(0, nc):
+        x[i] = X[:, c[i]]
     if len(adv) > 0:
-        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
-    train_data = utils_data.TensorDataset(x1, x2, y)
-    x1, x2 = X_valid[:, c0], X_valid[:, c1]
+        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
+    train_data = utils_data.TensorDataset(*x, y)
+    for i in range(0, nc):
+        x[i] = X_valid[:, c[i]]
     if len(adv) > 0 and adv_valid:
-        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
-    valid_data = utils_data.TensorDataset(x1, x2, y_valid)
-    x1, x2 = X_test[:, c0], X_test[:, c1]
+        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
+    valid_data = utils_data.TensorDataset(*x, y_valid)
+    for i in range(0, nc):
+        x[i] = X_test[:, c[i]]
     if len(adv) > 0 and adv_valid:
-        x1[:, adv] += torch.normal(mean=0, std=std, size=(x1.shape[0], len(adv)))
-    test_data = utils_data.TensorDataset(x1, x2, y_test)
+        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
+    test_data = utils_data.TensorDataset(*x, y_test)
 
     train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
                                          pin_memory=pin_memory)
