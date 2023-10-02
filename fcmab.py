@@ -1,4 +1,3 @@
-from itertools import cycle
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -172,6 +171,7 @@ class fcmab(object):
                     ucb = ucb_m + self.ucb_c * ucb_s if i > 0 else ucb_m
                     ucb[self.ucb_n == 0] = 1
                 k = np.argmax(ucb)
+                print('{0} clients selected.'.format(k))
                 self.model.S = np.array([False] * self.nc)
                 self.model.S[ind[:(k+1)]] = True
                 ucb_list.append(ucb)
