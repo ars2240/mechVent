@@ -2,7 +2,7 @@ from fcmab import *
 from fnn import *
 from floaders import *
 
-sh = 12
+sh = 2
 if sh == 2:
     c = [[6], [9], [4], [8], [1], [5], [*range(14, 54)], [2], [*range(10, 14)], [3]]
     shared = [0, 7]

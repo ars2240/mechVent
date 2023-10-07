@@ -9,7 +9,7 @@ from warnings import simplefilter
 from sklearn.exceptions import ConvergenceWarning
 simplefilter("ignore", category=ConvergenceWarning)
 
-sh = 1
+sh = 341  # 1, 85, 171, 255, 341
 if sh == 1:
     c0 = [*range(348, 352), 32, 69, 99, 114, 196, 286, 324, *range(352, 358), 45, 46, 58, 259, 209, 220, 312, 1, 12, 30,
           61, 83, 89, 113, 145, 232, 235, 272, 281, 300, 311, 322, 34, 49, 202, 212, 217, 233, 269, 270, 271, 287, 305,
@@ -71,7 +71,7 @@ fl = 'none'  # none, horizontal, or vertical
 plus = True
 adv_valid = True
 rand_init = True
-epochs = 1
+epochs = 100
 inner = 100
 fill = 0
 test_size, valid_size = 0.2, 0.2

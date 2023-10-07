@@ -3,7 +3,7 @@ from fnn import *
 from floaders import *
 from itertools import chain
 
-sh = 1
+sh = 41
 if sh == 1:
     c = [[16, 19, 25, 26], [5, 8, 12, 24], [3, 9, 29, *range(41, 111)], [7, 17, 32, 35], [14, 36, 37, *range(38, 41)],
          [4, 15, 20, 23], [2, 13, 18, 28], [1, 6, 30, 31], [0, 27, 33, 34], [10, 11, 21, *range(111, 122)]]

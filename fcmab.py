@@ -171,7 +171,8 @@ class fcmab(object):
                     ucb = ucb_m + self.ucb_c * ucb_s if i > 0 else ucb_m
                     ucb[self.ucb_n == 0] = 1
                 k = np.argmax(ucb)
-                print('{0} clients selected.'.format(k))
+                print('{0} clients selected.'.format(k+1))
+                print('Clients chosen: {0}'.format(', '.join([str(x) for x in ind[:(k+1)]])))
                 self.model.S = np.array([False] * self.nc)
                 self.model.S[ind[:(k+1)]] = True
                 ucb_list.append(ucb)
@@ -198,8 +199,8 @@ class fcmab(object):
 
                     if j == 0 and epoch == 0 and self.verbose:
                         X, y = data[:-1], data[-1]
-                        for k in range(self.nc):
-                            print('x{0}: {1}'.format(k, X[k]))
+                        for l in range(self.nc):
+                            print('x{0}: {1}'.format(l, X[l]))
                         print('y: {0}'.format(y))
 
                     _, l, _ = self.model_loss(data)
@@ -309,10 +310,18 @@ class fcmab(object):
 
         if self.verbose:
             print(self.model.S)
+            print('Clients chosen: {0}'.format(', '.join([str(x) for x, b in enumerate(self.model.S) if b])))
         print('Train\tAcc\tTest\tAcc')
         train_loss, train_acc = self.loss_acc(train_loader, head=self.head + '_tr')
         test_loss, test_acc = self.loss_acc(test_loader, head=self.head + '_test')
         print("%f\t%f\t%f\t%f" % (train_loss, train_acc, test_loss, test_acc))
+
+        if self.nc == 2:
+            print('Config\tTrAcc\tTeAcc\tBthAcc\tC0Acc\tC1Acc')
+            bth, c0, c1 = '[ True  True]', '[ True False]', '[False  True]'
+            config = 'Both' if all(self.model.S) else 'Client 0' if self.model.S[0] else 'Client 1'
+            print("%s\t%f\t%f\t%f\t%f\t%f" % (config, train_acc, test_acc, self.best_models[bth], self.best_models[c0],
+                                              self.best_models[c1]))
 
         # close log
         log_file.close()  # close log file
