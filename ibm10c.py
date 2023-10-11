@@ -1,6 +1,7 @@
 from fcmab import *
 from fnn import *
 from floaders import *
+from itertools import chain
 
 # sh = 255  # 1, 85, 171, 255, 341
 for sh in [1, 85, 171, 255, 341]:

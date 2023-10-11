@@ -312,7 +312,7 @@ def adv_forest_loader(batch_size=1, num_workers=0, pin_memory=True, split=None, 
 
 
 def taiwan_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
-                  std=1, c=[], adv=[], adv_valid=True, u='taiwan.csv'):
+                  std=1, c=[], adv=[], adv_valid=True, u='taiwan.csv', counts=False):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
@@ -343,7 +343,7 @@ with open('ni_cols_orig.txt', 'r') as f:
 
 
 def ni_loader(batch_size=1, seed=1226, state=1226, train_size=1, valid_size=0.2, num_workers=0, pin_memory=True, std=1,
-              c=[], adv=[], adv_valid=True, classes=2, plus=True):
+              c=[], adv=[], adv_valid=True, classes=2, plus=True, counts=False):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
@@ -416,7 +416,7 @@ def ni_loader(batch_size=1, seed=1226, state=1226, train_size=1, valid_size=0.2,
 
 
 def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
-               std=1, undersample=None, c=[], adv=[], adv_valid=True):
+               std=1, undersample=None, c=[], adv=[], adv_valid=True, counts=False):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
