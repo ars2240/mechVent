@@ -416,7 +416,7 @@ def ni_loader(batch_size=1, seed=1226, state=1226, train_size=1, valid_size=0.2,
 
 
 def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
-               std=1, undersample=None, c=[], adv=[], adv_valid=True, counts=False):
+               std=1, undersample=None, c=[], adv=[], adv_valid=True, verbose=False):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
@@ -426,7 +426,8 @@ def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.
     # import dataset
     df = pd.read_csv(filename, header=None)
     df.drop(columns=df.columns[0], axis=1, inplace=True)
-    print(df.shape)
+    if verbose:
+        print(df.shape)
 
     # undersample dominant class
     ccol = df.columns[-1]
@@ -435,13 +436,15 @@ def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.
         df_1 = df[df[ccol]]
         df_0_under = df_0.sample(undersample * df_1.shape[0], random_state=seed)
         df = pd.concat([df_0_under, df_1], axis=0)
-        print(df.shape)
+        if verbose:
+            print(df.shape)
     df[ccol] = df[ccol].replace({True: 1, False: 0})
 
     # split classes & features
     X = df.values[:, :-1]
     y = df.values[:, -1]
-    print(X.shape)
+    if verbose:
+        print(X.shape)
 
     # one-hot encode categorical variables
     X = pd.DataFrame(X)
@@ -449,7 +452,8 @@ def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.
     nunique = np.array(X.nunique())
     cols = np.where(np.logical_and(np.logical_and(2 < nunique, nunique < 10), int_vals))[0]
     X = pd.get_dummies(X, columns=X.columns[cols])  # convert objects to one-hot encoding
-    print(X.shape)
+    if verbose:
+        print(X.shape)
     """
     for col in X.columns:
         print(col)
@@ -460,6 +464,6 @@ def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.
     X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
 
     train_loader, valid_loader, test_loader = getLoaders(X, X_valid, X_test, y, y_valid, y_test, batch_size, seed,
-                                                         num_workers, pin_memory, std, c, adv, adv_valid, counts, True)
+                                                         num_workers, pin_memory, std, c, adv, adv_valid, verbose, True)
 
     return train_loader, valid_loader, test_loader
