@@ -3,8 +3,7 @@ from fnn import *
 from floaders import *
 from itertools import chain
 
-# sh = 255  # 1, 85, 171, 255, 341
-for sh in [1, 85, 171, 255, 341]:
+for sh in [1, 81, 171, 251, 341]:
     head = 'IBMU4_Sh' + str(sh)
     if sh == 1:
         c = [[141, 56, 227, 44, 59, 57, 320, 167, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 294, 297, 31, 74,
