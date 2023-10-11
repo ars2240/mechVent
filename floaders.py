@@ -216,7 +216,7 @@ def cifar_loader(root='./data', batch_size=1, seed=1226, valid_size=0.2, shuffle
 
 
 def forest_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
-                  u='https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz', std=1, nc=2,
+                  u='https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz', std=1,
                   c=[], adv=[], adv_valid=True, counts=False):
     np.random.seed(seed)
     torch.manual_seed(seed)

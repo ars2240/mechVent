@@ -81,7 +81,7 @@ for sh in [1, 85, 171, 255, 341]:
 
     tr_loader, val_loader, te_loader = ibm_loader(batch_size=128, c=c, adv=adv, adv_valid=True, undersample=4)
     # tr_loader, val_loader, te_loader = adv_forest_loader(batch_size=128, adv_valid=True, c0=c0, c1=c1, head=head + '_best')
-    model = FLNSH(feats=c, nc=2, classes=2)
+    model = FLNSH(feats=c, nc=10, classes=2)
     opt = torch.optim.Adam(model.parameters(), weight_decay=.01)
     loss = nn.CrossEntropyLoss()
 

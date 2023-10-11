@@ -16,7 +16,7 @@ for sh in range(2, 13, 10):
         c[i].extend(shared)
     print(c)
 
-    tr_loader, val_loader, te_loader = forest_loader(batch_size=128, c=c, adv=adv, nc=10, adv_valid=True)
+    tr_loader, val_loader, te_loader = forest_loader(batch_size=128, c=c, adv=adv, adv_valid=True)
     # tr_loader, val_loader, te_loader = adv_forest_loader(batch_size=128, adv_valid=True, c0=c0, c1=c1, head='advLogReg2AdamRandInitShare12_best')
     model = FLNSH(feats=c, nc=10, classes=7)
     opt = torch.optim.Adam(model.parameters())
