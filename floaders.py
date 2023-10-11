@@ -59,6 +59,59 @@ def getData(data, num_workers=0, pin_memory=False):
     return x, y
 
 
+def getLoaders(X, X_valid, X_test, y, y_valid, y_test, batch_size=1, seed=1226, num_workers=0, pin_memory=True, std=1,
+               c=[], adv=[], adv_valid=True, counts=False, scale=True):
+    torch.manual_seed(seed)
+
+    # normalize data
+    if scale:
+        scaler = StandardScaler()
+        scaler.fit(X)
+        X = scaler.transform(X)
+        X_valid = scaler.transform(X_valid)
+        X_test = scaler.transform(X_test)
+
+    if counts:
+        print('Train counts: {0}'.format({item: list(y).count(item)/len(y) for item in y}))
+        print('Valid counts: {0}'.format({item: list(y_valid).count(item)/len(y_valid) for item in y_valid}))
+        print('Test counts: {0}'.format({item: list(y_test).count(item)/len(y_test) for item in y_test}))
+
+    # convert data-types
+    X = torch.from_numpy(X).float()
+    y = torch.from_numpy(y).long()
+    X_test = torch.from_numpy(X_test).float()
+    y_test = torch.from_numpy(y_test).long()
+    X_valid = torch.from_numpy(X_valid).float()
+    y_valid = torch.from_numpy(y_valid).long()
+
+    nc = len(c)
+    x = [None] * nc
+    for i in range(nc):
+        x[i] = X[:, c[i]]
+    if len(adv) > 0:
+        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
+    train_data = utils_data.TensorDataset(*x, y)
+    for i in range(nc):
+        x[i] = X_valid[:, c[i]]
+    if len(adv) > 0 and adv_valid:
+        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
+    valid_data = utils_data.TensorDataset(*x, y_valid)
+    for i in range(nc):
+        x[i] = X_test[:, c[i]]
+    if len(adv) > 0 and adv_valid:
+        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
+    test_data = utils_data.TensorDataset(*x, y_test)
+
+    train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
+                                         pin_memory=pin_memory)
+    valid_loader = utils_data.DataLoader(valid_data, batch_size=batch_size, num_workers=num_workers,
+                                         pin_memory=pin_memory)
+    test_loader = utils_data.DataLoader(test_data, batch_size=batch_size, num_workers=num_workers,
+                                        pin_memory=pin_memory)
+
+    return train_loader, valid_loader, test_loader
+
+
 def cifar_loader(root='./data', batch_size=1, seed=1226, valid_size=0.2, shuffle=False, num_workers=0,
                  pin_memory=True, download=False, crop=8, blur=3, pad=True):
     """
@@ -164,7 +217,7 @@ def cifar_loader(root='./data', batch_size=1, seed=1226, valid_size=0.2, shuffle
 
 def forest_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
                   u='https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz', std=1, nc=2,
-                  c=[], adv=[], adv_valid=True):
+                  c=[], adv=[], adv_valid=True, counts=False):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
@@ -181,49 +234,8 @@ def forest_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size
     X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=state)
     X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
 
-    # normalize data
-    scaler = StandardScaler()
-    scaler.fit(X)
-    X = scaler.transform(X)
-    X_valid = scaler.transform(X_valid)
-    X_test = scaler.transform(X_test)
-
-    # print('Train counts: {0}'.format({item: list(y).count(item)/len(y) for item in y}))
-    # print('Valid counts: {0}'.format({item: list(y_valid).count(item)/len(y_valid) for item in y_valid}))
-    # print('Test counts: {0}'.format({item: list(y_test).count(item)/len(y_test) for item in y_test}))
-
-    # convert data-types
-    X = torch.from_numpy(X).float()
-    y = torch.from_numpy(y).long()
-    X_test = torch.from_numpy(X_test).float()
-    y_test = torch.from_numpy(y_test).long()
-    X_valid = torch.from_numpy(X_valid).float()
-    y_valid = torch.from_numpy(y_valid).long()
-
-    nc = len(c)
-    x = [None] * nc
-    for i in range(nc):
-        x[i] = X[:, c[i]]
-    if len(adv) > 0:
-        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
-    train_data = utils_data.TensorDataset(*x, y)
-    for i in range(nc):
-        x[i] = X_valid[:, c[i]]
-    if len(adv) > 0 and adv_valid:
-        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
-    valid_data = utils_data.TensorDataset(*x, y_valid)
-    for i in range(nc):
-        x[i] = X_test[:, c[i]]
-    if len(adv) > 0 and adv_valid:
-        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
-    test_data = utils_data.TensorDataset(*x, y_test)
-
-    train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
-                                         pin_memory=pin_memory)
-    valid_loader = utils_data.DataLoader(valid_data, batch_size=batch_size, num_workers=num_workers,
-                                         pin_memory=pin_memory)
-    test_loader = utils_data.DataLoader(test_data, batch_size=batch_size, num_workers=num_workers,
-                                        pin_memory=pin_memory)
+    train_loader, valid_loader, test_loader = getLoaders(X, X_valid, X_test, y, y_valid, y_test, batch_size, seed,
+                                                         num_workers, pin_memory, std, c, adv, adv_valid, counts, True)
 
     return train_loader, valid_loader, test_loader
 
@@ -313,45 +325,8 @@ def taiwan_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size
     X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=state)
     X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
 
-    # normalize data
-    scaler = StandardScaler()
-    scaler.fit(X)
-    X = scaler.transform(X)
-    X_valid = scaler.transform(X_valid)
-    X_test = scaler.transform(X_test)
-
-    # convert data-types
-    X = torch.from_numpy(X).float()
-    y = torch.from_numpy(y).long()
-    X_test = torch.from_numpy(X_test).float()
-    y_test = torch.from_numpy(y_test).long()
-    X_valid = torch.from_numpy(X_valid).float()
-    y_valid = torch.from_numpy(y_valid).long()
-
-    nc = len(c)
-    x = [None] * nc
-    for i in range(nc):
-        x[i] = X[:, c[i]]
-    if len(adv) > 0:
-        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
-    train_data = utils_data.TensorDataset(*x, y)
-    for i in range(nc):
-        x[i] = X_valid[:, c[i]]
-    if len(adv) > 0 and adv_valid:
-        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
-    valid_data = utils_data.TensorDataset(*x, y_valid)
-    for i in range(nc):
-        x[i] = X_test[:, c[i]]
-    if len(adv) > 0 and adv_valid:
-        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
-    test_data = utils_data.TensorDataset(*x, y_test)
-
-    train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
-                                         pin_memory=pin_memory)
-    valid_loader = utils_data.DataLoader(valid_data, batch_size=batch_size, num_workers=num_workers,
-                                         pin_memory=pin_memory)
-    test_loader = utils_data.DataLoader(test_data, batch_size=batch_size, num_workers=num_workers,
-                                        pin_memory=pin_memory)
+    train_loader, valid_loader, test_loader = getLoaders(X, X_valid, X_test, y, y_valid, y_test, batch_size, seed,
+                                                         num_workers, pin_memory, std, c, adv, adv_valid, counts, True)
 
     return train_loader, valid_loader, test_loader
 
@@ -434,45 +409,8 @@ def ni_loader(batch_size=1, seed=1226, state=1226, train_size=1, valid_size=0.2,
         X, _, y, _ = train_test_split(np.array(X), np.array(y), test_size=train_size, random_state=state)
     X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
 
-    # normalize data
-    scaler = StandardScaler()
-    scaler.fit(X)
-    X = scaler.transform(X)
-    X_valid = scaler.transform(X_valid)
-    X_test = scaler.transform(X_test)
-
-    # convert data-types
-    X = torch.from_numpy(X).float()
-    y = torch.from_numpy(y).long()
-    X_test = torch.from_numpy(X_test).float()
-    y_test = torch.from_numpy(y_test).long()
-    X_valid = torch.from_numpy(X_valid).float()
-    y_valid = torch.from_numpy(y_valid).long()
-
-    nc = len(c)
-    x = [None] * nc
-    for i in range(nc):
-        x[i] = X[:, c[i]]
-    if len(adv) > 0:
-        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
-    train_data = utils_data.TensorDataset(*x, y)
-    for i in range(nc):
-        x[i] = X_valid[:, c[i]]
-    if len(adv) > 0 and adv_valid:
-        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
-    valid_data = utils_data.TensorDataset(*x, y_valid)
-    for i in range(nc):
-        x[i] = X_test[:, c[i]]
-    if len(adv) > 0 and adv_valid:
-        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
-    test_data = utils_data.TensorDataset(*x, y_test)
-
-    train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
-                                         pin_memory=pin_memory)
-    valid_loader = utils_data.DataLoader(valid_data, batch_size=batch_size, num_workers=num_workers,
-                                         pin_memory=pin_memory)
-    test_loader = utils_data.DataLoader(test_data, batch_size=batch_size, num_workers=num_workers,
-                                        pin_memory=pin_memory)
+    train_loader, valid_loader, test_loader = getLoaders(X, X_valid, X_test, y, y_valid, y_test, batch_size, seed,
+                                                         num_workers, pin_memory, std, c, adv, adv_valid, counts, True)
 
     return train_loader, valid_loader, test_loader
 
@@ -521,44 +459,7 @@ def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.
     X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=state)
     X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
 
-    # normalize data
-    scaler = StandardScaler()
-    scaler.fit(X)
-    X = scaler.transform(X)
-    X_valid = scaler.transform(X_valid)
-    X_test = scaler.transform(X_test)
-
-    # convert data-types
-    X = torch.from_numpy(X).float()
-    y = torch.from_numpy(y).long()
-    X_test = torch.from_numpy(X_test).float()
-    y_test = torch.from_numpy(y_test).long()
-    X_valid = torch.from_numpy(X_valid).float()
-    y_valid = torch.from_numpy(y_valid).long()
-
-    nc = len(c)
-    x = [None] * nc
-    for i in range(nc):
-        x[i] = X[:, c[i]]
-    if len(adv) > 0:
-        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
-    train_data = utils_data.TensorDataset(*x, y)
-    for i in range(nc):
-        x[i] = X_valid[:, c[i]]
-    if len(adv) > 0 and adv_valid:
-        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
-    valid_data = utils_data.TensorDataset(*x, y_valid)
-    for i in range(nc):
-        x[i] = X_test[:, c[i]]
-    if len(adv) > 0 and adv_valid:
-        x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
-    test_data = utils_data.TensorDataset(*x, y_test)
-
-    train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
-                                         pin_memory=pin_memory)
-    valid_loader = utils_data.DataLoader(valid_data, batch_size=batch_size, num_workers=num_workers,
-                                         pin_memory=pin_memory)
-    test_loader = utils_data.DataLoader(test_data, batch_size=batch_size, num_workers=num_workers,
-                                        pin_memory=pin_memory)
+    train_loader, valid_loader, test_loader = getLoaders(X, X_valid, X_test, y, y_valid, y_test, batch_size, seed,
+                                                         num_workers, pin_memory, std, c, adv, adv_valid, counts, True)
 
     return train_loader, valid_loader, test_loader

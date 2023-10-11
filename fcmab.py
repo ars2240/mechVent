@@ -308,9 +308,10 @@ class fcmab(object):
             self.load(head=self.head + '_best')
         print(self.best_models)
 
+        cc = ', '.join([str(x) for x, b in enumerate(self.model.S) if b])
         if self.verbose:
             print(self.model.S)
-            print('Clients chosen: {0}'.format(', '.join([str(x) for x, b in enumerate(self.model.S) if b])))
+            print('Clients chosen: {0}'.format(cc))
         print('Train\tAcc\tTest\tAcc')
         train_loss, train_acc = self.loss_acc(train_loader, head=self.head + '_tr')
         test_loss, test_acc = self.loss_acc(test_loader, head=self.head + '_test')
@@ -322,6 +323,10 @@ class fcmab(object):
             config = 'Both' if all(self.model.S) else 'Client 0' if self.model.S[0] else 'Client 1'
             print("%s\t%f\t%f\t%f\t%f\t%f" % (config, train_acc, test_acc, self.best_models[bth], self.best_models[c0],
                                               self.best_models[c1]))
+        else:
+            print('Config\tTrAcc\tTeAcc\tValAcc')
+            config = 'Clients {0}'.format(cc)
+            print("%s\t%f\t%f\t%f" % (config, train_acc, test_acc, best_acc))
 
         # close log
         log_file.close()  # close log file

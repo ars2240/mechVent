@@ -29,9 +29,9 @@ for sh in [1, 11, 21, 31, 41]:
     tr_loader, val_loader, te_loader = ni_loader(batch_size=128, c=[c0, c1], adv=adv, adv_valid=True)
     # tr_loader, val_loader, te_loader = adv_forest_loader(batch_size=128, adv_valid=True, c0=c0, c1=c1, head=head + '_best')
     # model = FLR(train_feat=[len(c0), len(c1)], nc=2, classes=7)
-    model = FLRSH(feats=[c0, c1], nc=2, classes=2)
+    model = FLNSH(feats=[c0, c1], nc=2, classes=2)
     opt = torch.optim.Adam(model.parameters())
     loss = nn.CrossEntropyLoss()
 
-    cmab = fcmab(model, loss, opt, nc=2, n=100, c='mabLin', head=head + '_FLRSH_RandPert', verbose=True)
+    cmab = fcmab(model, loss, opt, nc=2, n=100, c='mabLin', head=head + '_FLNSH_Pert', verbose=True)
     cmab.train(tr_loader, val_loader, te_loader)
