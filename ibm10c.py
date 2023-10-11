@@ -85,5 +85,5 @@ for sh in [1, 85, 171, 255, 341]:
     opt = torch.optim.Adam(model.parameters(), weight_decay=.01)
     loss = nn.CrossEntropyLoss()
 
-    cmab = fcmab(model, loss, opt, nc=2, n=100, c='mabLin', head=head + '_FLNSH10c_Decay.01_RandPert', verbose=True)
+    cmab = fcmab(model, loss, opt, nc=10, n=100, c='mabLin', head=head + '_FLNSH10c_Decay.01_RandPert', verbose=True)
     cmab.train(tr_loader, val_loader, te_loader)
