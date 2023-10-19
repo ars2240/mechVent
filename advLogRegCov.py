@@ -12,7 +12,7 @@ epochs = 100
 inner = 100
 fill = 0
 test_size, valid_size = 0.2, 0.2
-random_seed = 1226
+state = 1226
 model = LogisticRegression(max_iter=inner)
 # head = 'advLogReg2AdamRandInitShare0'
 head = 'Forest10cShare'
@@ -34,8 +34,8 @@ X = data.values[:, :-1]
 X = X.reshape((X.shape[0], 54))
 y = data.values[:, -1] - 1
 
-X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=random_seed)
-X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=random_seed)
+X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=state)
+X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
 
 for sh in range(2, 13, 10):
     if sh == 2:
