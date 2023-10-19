@@ -20,17 +20,18 @@ for sh in range(1, 42, 10):
         raise Exception('Number of shared features not implemented.')
     shared = [x for x in range(0, 122) if x not in chain(*c)]
     head = 'NI+Share' + str(sh)
-    adv = [*range(len(c[0]), len(c[0])+len(shared))]
+    adv = {0: [*range(len(c[0]), len(c[0])+len(shared))], 1: [*range(len(c[1]), len(c[1])+len(shared))],
+           2: [*range(len(c[2]), len(c[2])+len(shared))]}
     for i in range(len(c)):
         c[i].extend(shared)
     print(c)
 
     tr_loader, val_loader, te_loader = ni_loader(batch_size=128, c=c, adv=adv, adv_valid=True)
-    # tr_loader, val_loader, te_loader = adv_forest_loader(batch_size=128, adv_valid=True, c0=c0, c1=c1, head=head + '_best')
+    # tr_loader, val_loader, te_loader = adv_loader(batch_size=128, adv_valid=True, c0=c0, c1=c1, head=head + '_best')
     # model = FLR(train_feat=[len(c0), len(c1)], nc=2, classes=7)
-    model = FLNSH(feats=c, nc=10, classes=2)
+    model = FLRSH(feats=c, nc=10, classes=2)
     opt = torch.optim.Adam(model.parameters())
     loss = nn.CrossEntropyLoss()
 
-    cmab = fcmab(model, loss, opt, nc=10, n=100, c='mabLin', head=head + '_FLNSH10c_RandPert', verbose=True)
+    cmab = fcmab(model, loss, opt, nc=10, n=100, c='mabLin', head=head + '_FLRSH10c3a_RandPert', verbose=True)
     cmab.train(tr_loader, val_loader, te_loader)

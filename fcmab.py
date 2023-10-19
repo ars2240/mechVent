@@ -172,7 +172,8 @@ class fcmab(object):
                     ucb[self.ucb_n == 0] = 1
                 k = np.argmax(ucb)
                 print('{0} clients selected.'.format(k+1))
-                print('Clients chosen: {0}'.format(', '.join([str(x) for x in ind[:(k+1)]])))
+                cc = [str(x) for x in ind[:(k+1)]]
+                print('All Clients Chosen' if k+1 == self.nc else 'Clients Chosen: {0}'.format(', '.join(cc)))
                 self.model.S = np.array([False] * self.nc)
                 self.model.S[ind[:(k+1)]] = True
                 ucb_list.append(ucb)
@@ -311,7 +312,7 @@ class fcmab(object):
         cc = ', '.join([str(x) for x, b in enumerate(self.model.S) if b])
         if self.verbose:
             print(self.model.S)
-            print('Clients chosen: {0}'.format(cc))
+            print('All Clients Chosen' if all(self.model.S) else 'Clients Chosen: {0}'.format(cc))
         print('Train\tAcc\tTest\tAcc')
         train_loss, train_acc = self.loss_acc(train_loader, head=self.head + '_tr')
         test_loss, test_acc = self.loss_acc(test_loader, head=self.head + '_test')
@@ -325,7 +326,7 @@ class fcmab(object):
                                               self.best_models[c1]))
         else:
             print('Config\tTrAcc\tTeAcc\tValAcc')
-            config = 'Clients {0}'.format(cc)
+            config = 'All Clients' if all(self.model.S) else 'Clients {0}'.format(cc)
             print("%s\t%f\t%f\t%f" % (config, train_acc, test_acc, best_acc))
 
         # close log
@@ -382,6 +383,15 @@ class fcmab(object):
             ax.set_yticks(ticks)
             ax.set_yticklabels(ticks)
             plt.savefig('./plots/' + self.head + '_clients.png')
+            plt.clf()
+            plt.close()
+
+            plt.plot(np.sum(s_list, axis=0))
+            plt.title('Number of Clients')
+            plt.xlabel("Iterations")
+            plt.ylabel("Number of Clients")
+            plt.ylim(0, self.nc)
+            plt.savefig('./plots/' + self.head + '_numclients.png')
             plt.clf()
             plt.close()
 

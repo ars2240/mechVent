@@ -88,18 +88,27 @@ def getLoaders(X, X_valid, X_test, y, y_valid, y_test, batch_size=1, seed=1226, 
     x = [None] * nc
     for i in range(nc):
         x[i] = X[:, c[i]]
-    if len(adv) > 0:
+    if isinstance(adv, list) and len(adv) > 0:
         x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
+    elif isinstance(adv, dict):
+        for a in adv.keys():
+            x[a][:, adv[a]] += torch.normal(mean=0, std=std, size=(x[a].shape[0], len(adv[a])))
     train_data = utils_data.TensorDataset(*x, y)
     for i in range(nc):
         x[i] = X_valid[:, c[i]]
-    if len(adv) > 0 and adv_valid:
+    if isinstance(adv, list) and len(adv) > 0 and adv_valid:
         x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
+    elif isinstance(adv, dict) and adv_valid:
+        for a in adv.keys():
+            x[a][:, adv[a]] += torch.normal(mean=0, std=std, size=(x[a].shape[0], len(adv[a])))
     valid_data = utils_data.TensorDataset(*x, y_valid)
     for i in range(nc):
         x[i] = X_test[:, c[i]]
-    if len(adv) > 0 and adv_valid:
+    if isinstance(adv, list) and len(adv) > 0 and adv_valid:
         x[0][:, adv] += torch.normal(mean=0, std=std, size=(x[0].shape[0], len(adv)))
+    elif isinstance(adv, dict) and adv_valid:
+        for a in adv.keys():
+            x[a][:, adv[a]] += torch.normal(mean=0, std=std, size=(x[a].shape[0], len(adv[a])))
     test_data = utils_data.TensorDataset(*x, y_test)
 
     train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
@@ -242,8 +251,7 @@ def forest_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size
 
 def adv_forest_loader(batch_size=1, num_workers=0, pin_memory=True, split=None, head='advLogReg', adv_valid=True,
                       u='https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz',
-                      c0=[*range(0, 6), 9, *range(14, 54)], c1=[*range(6, 9), *range(10, 54)], random_seed=1226,
-                      test_size=0.2, valid_size=0.2):
+                      c0=[], c1=[], random_seed=1226, test_size=0.2, valid_size=0.2):
 
     check_folder('./data/')
 
@@ -374,7 +382,6 @@ def ni_loader(batch_size=1, seed=1226, state=1226, train_size=1, valid_size=0.2,
         """
         dic = {key: 'attack' for key in train[i].unique()}
         dic['normal'] = 'normal'
-        print(dic)
     elif classes == 5:
         dic = {'normal.': 'normal', 'nmap.': 'probing', 'portsweep.': 'probing', 'ipsweep.': 'probing',
                'satan.': 'probing', 'land.': 'dos', 'pod.': 'dos', 'teardrop.': 'dos', 'back.': 'dos',
