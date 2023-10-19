@@ -1,36 +1,10 @@
+from advLogReg import advLogReg
 import numpy as np
 from floaders import *
-from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import OneHotEncoder
-import matplotlib.pyplot as plt
-
-from warnings import simplefilter
-from sklearn.exceptions import ConvergenceWarning
-simplefilter("ignore", category=ConvergenceWarning)
+from itertools import chain
 
 sh = 41
-if sh == 1:
-    c0 = [0, 1, 6, 7, 14, 16, 17, 19, 25, 26, 27, 30, 31, 32, 33, 34, 35, 36, 37, *range(38, 41)]
-    c1 = [2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 15, 18, 20, 21, 23, 24, 28, 29, *range(41, 122)]
-elif sh == 11:
-    c0 = [0, 1, 6, 7, 14, 16, 17, 25, 26, 27, 31, 34, 35, 37, *range(38, 41)]
-    c1 = [2, 3, 5, 8, 9, 10, 11, 12, 13, 15, 20, 21, 23, 28, *range(41, 111)]
-elif sh == 21:
-    c0 = [0, 1, 7, 14, 16, 17, 25, 31, 34, 37]
-    c1 = [2, 3, 5, 9, 10, 11, 12, 13, 15, 23]
-elif sh == 31:
-    c0 = [0, 1, 14, 16, 17]
-    c1 = [3, 5, 10, 13, 15]
-elif sh == 41:
-    c0 = []
-    c1 = []
-else:
-    raise Exception('Number of shared features not implemented.')
-shared = [x for x in range(0, 122) if x not in c0 and x not in c1]
-print('client 0: {0}'.format(c0))
-print('client 1: {0}'.format(c1))
-print('shared: {0}'.format(shared))
 fl = 'none'  # none, horizontal, or vertical
 plus = True
 adv_valid = True
@@ -42,7 +16,7 @@ test_size, valid_size = 0.2, 0.2
 state = 1226
 model = LogisticRegression(max_iter=inner)
 modelC = LogisticRegression(max_iter=inner)
-head = 'NI+Share' + str(sh)
+head = 'NI+Share'
 adv_opt = 'adam'
 adv_beta = (0.9, 0.999)
 adv_eps = 1e-8
@@ -50,19 +24,6 @@ alpha = 0.001
 classes = 2
 
 np.random.seed(state)
-torch.manual_seed(state)
-
-
-"""
-def alpha(k):
-    return 1/(k+1)
-"""
-
-adv = [*range(len(c0), len(c0)+len(shared))]
-if fl.lower() != 'horizontal':
-    c0.extend(shared)
-if fl.lower() == 'vertical':
-    c1.extend(shared)
 
 # Load Data
 if plus:
@@ -123,7 +84,28 @@ X_test = X_test.reshape((test.shape[0], train_feat))
 
 X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
 
-advLogReg(X, X_valid, X_test, y, y_valid, y_test, fl, adv_valid, rand_init, epochs, inner, fill, adv_opt, adv_beta,
-          adv_eps, alpha, c0, c1, shared, adv, model, head)
+for sh in range(1, 42, 10):
+    if sh == 1:
+        c = [[16, 19, 25, 26], [5, 8, 12, 24], [3, 9, 29, *range(41, 111)], [7, 17, 32, 35],
+             [14, 36, 37, *range(38, 41)],
+             [4, 15, 20, 23], [2, 13, 18, 28], [1, 6, 30, 31], [0, 27, 33, 34], [10, 11, 21, *range(111, 122)]]
+    elif sh == 11:
+        c = [[16, 25, 26], [5, 8, 12], [3, 9, *range(41, 111)], [7, 17, 35], [14, 37, *range(38, 41)], [15, 20, 23],
+             [2, 13, 28], [1, 6, 31], [0, 27, 34], [10, 11, 21]]
+    elif sh == 21:
+        c = [[16, 25], [5, 12], [3, 9], [7, 17], [14, 37], [15, 23], [2, 13], [1, 31], [0, 34], [10, 11]]
+    elif sh == 31:
+        c = [[16], [5], [3], [17], [14], [15], [13], [1], [0], [10]]
+    elif sh == 41:
+        c = [[], [], [], [], [], [], [], [], [], []]
+    else:
+        raise Exception('Number of shared features not implemented.')
+    shared = [x for x in range(0, 122) if x not in chain(*c)]
+    print('shared: {0}'.format(shared))
+
+    adv = shared
+
+    advLogReg(X, X_valid, X_test, y, y_valid, y_test, fl, adv_valid, rand_init, epochs, inner, fill, adv_opt, adv_beta,
+              adv_eps, alpha, c0, c1, shared, adv, model, head + str(sh))
 
 

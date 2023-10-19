@@ -1,16 +1,16 @@
 from fcmab import *
 from fnn import *
 from floaders import *
+from itertools import chain
 
 for sh in range(2, 13, 10):
     if sh == 2:
         c = [[6], [9], [4], [8], [1], [5], [*range(14, 54)], [2], [*range(10, 14)], [3]]
-        shared = [0, 7]
     elif sh == 12:
         c = [[], [], [], [], [], [], [], [], [], []]
-        shared = [*range(0, 54)]
     else:
         raise Exception('Number of shared features not implemented.')
+    shared = [x for x in range(0, 54) if x not in chain(*c)]
     adv = {0: [*range(len(c[0]), len(c[0]) + len(shared))], 1: [*range(len(c[1]), len(c[1]) + len(shared))],
            2: [*range(len(c[2]), len(c[2]) + len(shared))]}
     for i in range(len(c)):
