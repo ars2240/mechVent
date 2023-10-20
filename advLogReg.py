@@ -57,9 +57,11 @@ def adversary_adam(model, X, y, j, m, v, enc, adv_beta, adv_eps, alpha, shared, 
 
 def advLogReg(X, X_valid, X_test, y, y_valid, y_test, fl='none', adv_valid=True, rand_init=True, epochs=100, inner=100,
               fill=0, adv_opt='adam', adv_beta=(0.9, 0.999), adv_eps=1e-8, alpha=0.001, c0=None, c1=None, shared=[],
-              adv=[], model=LogisticRegression(), head=''):
-
-    modelC = model
+              adv=[], model=None, modelC=None, head=''):
+    if model is None:
+        model = LogisticRegression(max_iter=inner)
+    if modelC is None:
+        modelC = LogisticRegression(max_iter=inner)
 
     if c0 is not None and fl.lower() != 'horizontal':
         c0.extend(shared)

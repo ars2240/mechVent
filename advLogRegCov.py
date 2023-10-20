@@ -9,13 +9,14 @@ fl = 'none'  # none, horizontal, or vertical
 adv_valid = True
 rand_init = True
 epochs = 100
-inner = 100
+inner = 10
 fill = 0
 test_size, valid_size = 0.2, 0.2
 state = 1226
 model = LogisticRegression(max_iter=inner)
+modelC = LogisticRegression(max_iter=inner)
 # head = 'advLogReg2AdamRandInitShare0'
-head = 'Forest10cShare'
+head = 'Forest10c_Sh'
 adv_opt = 'adam'
 adv_beta = (0.9, 0.999)
 adv_eps = 1e-8
@@ -49,8 +50,9 @@ for sh in range(2, 13, 10):
 
     # adv = [*range(len(c0), len(c0)+len(shared))]
     adv = shared
+    c0, c1 = None, None
 
     advLogReg(X, X_valid, X_test, y, y_valid, y_test, fl, adv_valid, rand_init, epochs, inner, fill, adv_opt, adv_beta,
-              adv_eps, alpha, c0, c1, shared, adv, model, head + str(sh))
+              adv_eps, alpha, c0, c1, shared, adv, model, modelC, head + str(sh))
 
 
