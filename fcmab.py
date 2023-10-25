@@ -87,7 +87,7 @@ class fcmab(object):
         log_file.close()  # close log file
         sys.stdout = old_stdout  # reset output
 
-        best_acc, best_iter = 0, 'N/A'
+        best_acc, best_iter, all_s = 0, 'N/A', None
         map = 0.5
         tr_acc_list, val_acc_list, map_list, s_list, theta_list = [], [], [], [], []
         if 'mab' in self.c.lower():
@@ -250,6 +250,7 @@ class fcmab(object):
                 print('new high!')
 
             str_s = str(self.model.S)
+            all_s = str_s if all(self.model.S) else all_s
             if str_s not in self.best_models.keys() or self.best_models[str_s] < val_acc:
                 self.best_models[str_s] = val_acc
 
@@ -325,9 +326,10 @@ class fcmab(object):
             print("%s\t%f\t%f\t%f\t%f\t%f" % (config, train_acc, test_acc, self.best_models[bth], self.best_models[c0],
                                               self.best_models[c1]))
         else:
-            print('Config\tTrAcc\tTeAcc\tValAcc')
+            print('Config\tTrAcc\tTeAcc\tValAcc\tAllAcc')
             config = 'All Clients' if all(self.model.S) else 'Clients {0}'.format(cc)
-            print("%s\t%f\t%f\t%f" % (config, train_acc, test_acc, best_acc))
+            all_acc = '' if all_s is None else str(self.best_models[all_s])
+            print("%s\t%f\t%f\t%f\t%s" % (config, train_acc, test_acc, best_acc, all_acc))
 
         # close log
         log_file.close()  # close log file

@@ -319,6 +319,72 @@ def adv_forest_loader(batch_size=1, num_workers=0, pin_memory=True, split=None, 
     return train_loader, valid_loader, test_loader
 
 
+def adv_loader(batch_size=1, num_workers=0, pin_memory=True, head='advLogReg', c=[], adv=[]):
+
+    check_folder('./data/')
+
+    # import data
+    X = np.genfromtxt('./data/' + head + '.csv', delimiter=',')
+    y = np.genfromtxt('./data/' + head + '_y.csv', delimiter=',')
+
+    X_valid = np.genfromtxt('./data/' + head + '_valid.csv', delimiter=',')
+    y_valid = np.genfromtxt('./data/' + head + '_y_valid.csv', delimiter=',')
+    X_test = np.genfromtxt('./data/' + head + '_test.csv', delimiter=',')
+    y_test = np.genfromtxt('./data/' + head + '_y_test.csv', delimiter=',')
+
+    # convert data-types
+    X = torch.from_numpy(X).float()
+    y = torch.from_numpy(y).long()
+    X_test = torch.from_numpy(X_test).float()
+    y_test = torch.from_numpy(y_test).long()
+    X_valid = torch.from_numpy(X_valid).float()
+    y_valid = torch.from_numpy(y_valid).long()
+
+    nc = len(c)
+    x = [None] * nc
+    for i in range(nc):
+        x[i] = X[:, c[i]]
+    if isinstance(adv, list) and len(adv) > 0:
+        la = len(adv)
+        for a in range(1, nc):
+            x[a][:, -la:] = X[:, -la:]
+    elif isinstance(adv, dict):
+        la = len(adv[list(adv.keys())[0]])
+        for a in range(0, nc):
+            if a not in adv.keys():
+                x[a][:, -la:] = X[:, -la:]
+    train_data = utils_data.TensorDataset(*x, y)
+    for i in range(nc):
+        x[i] = X_valid[:, c[i]]
+    if isinstance(adv, list) and len(adv) > 0:
+        for a in range(1, nc):
+            x[a][:, -la:] = X_valid[:, -la:]
+    elif isinstance(adv, dict):
+        for a in range(0, nc):
+            if a not in adv.keys():
+                x[a][:, -la:] = X_valid[:, -la:]
+    valid_data = utils_data.TensorDataset(*x, y_valid)
+    for i in range(nc):
+        x[i] = X_test[:, c[i]]
+    if isinstance(adv, list) and len(adv) > 0:
+        for a in range(1, nc):
+            x[a][:, -la:] = X_test[:, -la:]
+    elif isinstance(adv, dict):
+        for a in range(0, nc):
+            if a not in adv.keys():
+                x[a][:, -la:] = X_test[:, -la:]
+    test_data = utils_data.TensorDataset(*x, y_test)
+
+    train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
+                                         pin_memory=pin_memory)
+    valid_loader = utils_data.DataLoader(valid_data, batch_size=batch_size, num_workers=num_workers,
+                                         pin_memory=pin_memory)
+    test_loader = utils_data.DataLoader(test_data, batch_size=batch_size, num_workers=num_workers,
+                                        pin_memory=pin_memory)
+
+    return train_loader, valid_loader, test_loader
+
+
 def taiwan_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
                   std=1, c=[], adv=[], adv_valid=True, u='taiwan.csv', counts=False):
     np.random.seed(seed)
