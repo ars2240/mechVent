@@ -80,10 +80,10 @@ for sh in [1, 81, 171, 251, 341]:
     print(c)
 
     # tr_loader, val_loader, te_loader = ibm_loader(batch_size=128, c=c, adv=adv, adv_valid=True, undersample=4)
-    tr_loader, val_loader, te_loader = adv_loader(batch_size=128, c=c, adv=adv, head='IBMU410c_Sh' + str(sh) + '_best')
-    model = FLNSH(feats=c, nc=10, classes=2)
+    tr_loader, val_loader, te_loader = adv_loader(batch_size=128, c=c, adv=adv, head='IBMU410c_Sh' + str(sh))
+    model = FLRSH(feats=c, nc=10, classes=2)
     opt = torch.optim.Adam(model.parameters(), weight_decay=.01)
     loss = nn.CrossEntropyLoss()
 
-    cmab = fcmab(model, loss, opt, nc=10, n=100, c='mabLin', head=head + '_FLNSH10c3a_Decay.01_Adv', verbose=True)
+    cmab = fcmab(model, loss, opt, nc=10, n=100, c='mabLin', head=head + '_FLRSH10c3a_Decay.01_Adv', verbose=True)
     cmab.train(tr_loader, val_loader, te_loader)

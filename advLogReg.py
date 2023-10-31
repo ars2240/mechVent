@@ -10,12 +10,22 @@ from sklearn.exceptions import ConvergenceWarning
 simplefilter("ignore", category=ConvergenceWarning)
 
 
-def horizontalize(X, rand_init=True, fill=0, c0=[], c1=[], shared=[]):
-    X0, X1 = X.copy(), X.copy()
-    X0[:, c1], X1[:, c0] = fill, fill
-    if rand_init:
-        X0[:, shared] = np.random.normal(size=(X0.shape[0], len(shared)))
-    return np.concatenate((X0, X1), axis=0)
+def horizontalize(X, rand_init=True, fill=0, c0=None, c1=None, shared=[], adv_c=[]):
+    if c1 is None:
+        X0 = None
+        for i in range(len(c0)):
+            X1 = X.copy()
+            X1[:, c0[i]] = fill
+            if rand_init and i in adv_c:
+                X1[:, shared] = np.random.normal(size=(X1.shape[0], len(shared)))
+            X0 = X1 if X0 is None else np.concatenate((X0, X1), axis=0)
+        return X0
+    else:
+        X0, X1 = X.copy(), X.copy()
+        X0[:, c1], X1[:, c0] = fill, fill
+        if rand_init:
+            X0[:, shared] = np.random.normal(size=(X0.shape[0], len(shared)))
+        return np.concatenate((X0, X1), axis=0)
 
 
 def adversary(model, X, y, enc, alpha, shared, adv, fl):
@@ -57,7 +67,7 @@ def adversary_adam(model, X, y, j, m, v, enc, adv_beta, adv_eps, alpha, shared, 
 
 def advLogReg(X, X_valid, X_test, y, y_valid, y_test, fl='none', adv_valid=True, rand_init=True, epochs=100, inner=100,
               fill=0, adv_opt='adam', adv_beta=(0.9, 0.999), adv_eps=1e-8, alpha=0.001, c0=None, c1=None, shared=[],
-              adv=[], model=None, modelC=None, head=''):
+              adv=[], model=None, modelC=None, head='', adv_c=[], compress=True):
     if model is None:
         model = LogisticRegression(max_iter=inner)
     if modelC is None:
@@ -74,6 +84,7 @@ def advLogReg(X, X_valid, X_test, y, y_valid, y_test, fl='none', adv_valid=True,
     X = scaler.transform(X)
     X_valid = scaler.transform(X_valid)
     X_test = scaler.transform(X_test)
+    os = [len(y), len(y_valid), len(y_test)]
 
     multi = y.max() > 1
     if multi:
@@ -83,13 +94,17 @@ def advLogReg(X, X_valid, X_test, y, y_valid, y_test, fl='none', adv_valid=True,
         enc = None
 
     if fl.lower() == 'horizontal':
-        X = horizontalize(X, rand_init, fill, c0, c1, shared)
-        y = np.concatenate((y, y), axis=0)
+        nc = len(c0) if c1 is None else 2
+        X = horizontalize(X, rand_init, fill, c0, c1, shared, adv_c)
+        y = np.tile(y, (1, nc))
+        y = y.flatten() if y.shape[0] == 1 else y
         if adv_valid:
-            X_valid = horizontalize(X_valid, rand_init, fill, c0, c1, shared)
-            y_valid = np.concatenate((y_valid, y_valid), axis=0)
-            X_test = horizontalize(X_test, rand_init, fill, c0, c1, shared)
-            y_test = np.concatenate((y_test, y_test), axis=0)
+            X_valid = horizontalize(X_valid, rand_init, fill, c0, c1, shared, adv_c)
+            y_valid = np.tile(y_valid, (1, nc))
+            y_valid = y_valid.flatten() if y_valid.shape[0] == 1 else y_valid
+            X_test = horizontalize(X_test, rand_init, fill, c0, c1, shared, adv_c)
+            y_test = np.tile(y_test, (1, nc))
+            y_test = y_test.flatten() if y_test.shape[0] == 1 else y_test
     else:
         if c0 is not None and c1 is not None:
             X = np.concatenate((X[:, c0], X[:, c1]), axis=1)
@@ -165,24 +180,44 @@ def advLogReg(X, X_valid, X_test, y, y_valid, y_test, fl='none', adv_valid=True,
         X_test = np.concatenate((X_test, X_ag_test), axis=1)
 
     check_folder('./data')
-    np.savetxt("./data/" + head + ".csv", X, delimiter=",")
-    np.savetxt("./data/" + head + "_valid.csv", X_valid, delimiter=",")
-    np.savetxt("./data/" + head + "_test.csv", X_test, delimiter=",")
-    np.savetxt("./data/" + head + "_y.csv", y, delimiter=",")
-    np.savetxt("./data/" + head + "_y_valid.csv", y_valid, delimiter=",")
-    np.savetxt("./data/" + head + "_y_test.csv", y_test, delimiter=",")
+    if fl.lower() == 'horizontal' and compress:
+        np.savetxt("./data/" + head + ".csv", X[:(os[0] * len(adv_c)), adv], delimiter=",")
+        np.savetxt("./data/" + head + "_valid.csv", X_valid[:(os[1] * len(adv_c)), adv], delimiter=",")
+        np.savetxt("./data/" + head + "_test.csv", X_test[:(os[2] * len(adv_c)), adv], delimiter=",")
+    elif compress:
+        np.savetxt("./data/" + head + ".csv", X[:, adv], delimiter=",")
+        np.savetxt("./data/" + head + "_valid.csv", X_valid[:, adv], delimiter=",")
+        np.savetxt("./data/" + head + "_test.csv", X_test[:, adv], delimiter=",")
+    else:
+        np.savetxt("./data/" + head + ".csv", X, delimiter=",")
+        np.savetxt("./data/" + head + "_valid.csv", X_valid, delimiter=",")
+        np.savetxt("./data/" + head + "_test.csv", X_test, delimiter=",")
+    if fl.lower() == 'horizontal' and compress:
+        np.savetxt("./data/" + head + "_y.csv", y[:os[0]], delimiter=",")
+        np.savetxt("./data/" + head + "_y_valid.csv", y_valid[:os[0]], delimiter=",")
+        np.savetxt("./data/" + head + "_y_test.csv", y_test[:os[0]], delimiter=",")
+    else:
+        np.savetxt("./data/" + head + "_y.csv", y, delimiter=",")
+        np.savetxt("./data/" + head + "_y_valid.csv", y_valid, delimiter=",")
+        np.savetxt("./data/" + head + "_y_test.csv", y_test, delimiter=",")
 
     if fl.lower() == 'none':
         X_best = np.concatenate((X_best, X_ag), axis=1)
         X_valid_best = np.concatenate((X_valid_best, X_ag_valid), axis=1)
         X_test_best = np.concatenate((X_test_best, X_ag_test), axis=1)
 
-    np.savetxt("./data/" + head + "_best.csv", X_best, delimiter=",")
-    np.savetxt("./data/" + head + "_best_valid.csv", X_valid_best, delimiter=",")
-    np.savetxt("./data/" + head + "_best_test.csv", X_test_best, delimiter=",")
-    np.savetxt("./data/" + head + "_best_y.csv", y, delimiter=",")
-    np.savetxt("./data/" + head + "_best_y_valid.csv", y_valid, delimiter=",")
-    np.savetxt("./data/" + head + "_best_y_test.csv", y_test, delimiter=",")
+    if fl.lower() == 'horizontal' and compress:
+        np.savetxt("./data/" + head + "_best.csv", X[:(os[0] * len(adv_c)), adv], delimiter=",")
+        np.savetxt("./data/" + head + "_best_valid.csv", X_valid[:(os[1] * len(adv_c)), adv], delimiter=",")
+        np.savetxt("./data/" + head + "_best_test.csv", X_test[:(os[2] * len(adv_c)), adv], delimiter=",")
+    elif compress:
+        np.savetxt("./data/" + head + "_best.csv", X_best[:, adv], delimiter=",")
+        np.savetxt("./data/" + head + "_best_valid.csv", X_valid_best[:, adv], delimiter=",")
+        np.savetxt("./data/" + head + "_best_test.csv", X_test_best[:, adv], delimiter=",")
+    else:
+        np.savetxt("./data/" + head + "_best.csv", X_best, delimiter=",")
+        np.savetxt("./data/" + head + "_best_valid.csv", X_valid_best, delimiter=",")
+        np.savetxt("./data/" + head + "_best_test.csv", X_test_best, delimiter=",")
 
     check_folder('./plots')
     plt.plot(loss, label='post-Adv')

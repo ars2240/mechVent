@@ -5,7 +5,7 @@ from sklearn.linear_model import LogisticRegression
 from itertools import chain
 
 
-fl = 'none'  # none, horizontal, or vertical
+fl = 'horizontal'  # none, horizontal, or vertical
 plus = True
 adv_valid = True
 rand_init = True
@@ -16,12 +16,13 @@ test_size, valid_size = 0.2, 0.2
 state = 1226
 model = LogisticRegression(max_iter=inner)
 modelC = LogisticRegression(max_iter=inner)
-head = 'NI+10c_Sh'
+head = 'NI+10c3a_Sh'
 adv_opt = 'adam'
 adv_beta = (0.9, 0.999)
 adv_eps = 1e-8
 alpha = 0.001
 classes = 2
+adv_c = [0, 1, 2]
 
 np.random.seed(state)
 
@@ -84,7 +85,7 @@ X_test = X_test.reshape((test.shape[0], train_feat))
 
 X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
 
-for sh in range(1, 42, 10):
+for sh in range(1, 22, 10):
     if sh == 1:
         c = [[16, 19, 25, 26], [5, 8, 12, 24], [3, 9, 29, *range(41, 111)], [7, 17, 32, 35],
              [14, 36, 37, *range(38, 41)],
@@ -104,9 +105,9 @@ for sh in range(1, 42, 10):
     print('shared: {0}'.format(shared))
 
     adv = shared
-    c0, c1 = None, None
+    c0, c1 = c, None
 
     advLogReg(X, X_valid, X_test, y, y_valid, y_test, fl, adv_valid, rand_init, epochs, inner, fill, adv_opt, adv_beta,
-              adv_eps, alpha, c0, c1, shared, adv, model, modelC, head + str(sh))
+              adv_eps, alpha, c0, c1, shared, adv, model, modelC, head + str(sh), adv_c)
 
 

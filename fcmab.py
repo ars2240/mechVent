@@ -36,6 +36,17 @@ def timeHMS(t, head=''):
     print(head + 'Time elapsed: %2i hrs, %2i min, %4.2f sec' % (hrs, mins, secs))
 
 
+def numberToBase(n, b):
+    # https://stackoverflow.com/a/28666223
+    if n == 0:
+        return [0]
+    digits = []
+    while n:
+        digits.append(int(n % b))
+        n //= b
+    return digits[::-1]
+
+
 class fcmab(object):
     def __init__(self, model, loss, opt, nc=2, n=10, epochs=10, c=.5, keep_best=True, seed=1226, head='',
                  conf_matrix=False, adversarial=None, adv_epoch=1, adv_opt='sgd', adv_beta=(0.9, 0.999), adv_eps=1e-8,
@@ -57,9 +68,9 @@ class fcmab(object):
         self.ucb_c = ucb_c  # confidence in UCB
         self.xdim = xdim  # dimensions of ucb x
         self.c = c  # cutoff
-        self.keep_best = keep_best  # whether or not best model is kept
+        self.keep_best = keep_best  # whether best model is kept
         self.head = head  # file label
-        self.conf_matrix = conf_matrix  # whether or not a confusion matrix is generated
+        self.conf_matrix = conf_matrix  # whether a confusion matrix is generated
         self.adversarial = adversarial  # which (if any) clients are adversarial
         self.adv_epoch = adv_epoch  # number of adversarial epochs
         self.adv_opt = adv_opt  # adversarial optimizer
@@ -90,8 +101,7 @@ class fcmab(object):
         best_acc, best_iter, all_s = 0, 'N/A', None
         map = 0.5
         tr_acc_list, val_acc_list, map_list, s_list, theta_list = [], [], [], [], []
-        if 'mab' in self.c.lower():
-            ucb_list, ucb_mean, ucb_std = [], [], []
+        ucb_list, ucb_mean, ucb_std = [], [], []
         if self.c.lower() == 'mablin':
             xz = np.random.normal(size=(self.nc, self.xdim))
             A = [np.identity(self.nc + self.xdim) for _ in range(self.nc)]
@@ -103,6 +113,10 @@ class fcmab(object):
             A = [np.identity(self.xdim) for _ in range(self.nc)]
             B = [np.zeros((self.xdim, self.nc)) for _ in range(self.nc)]
             b = [np.zeros((self.xdim, 1)) for _ in range(self.nc)]
+        elif self.c.lower() == 'allgood':
+            good = [c for c in range(self.nc) if c not in self.adversarial]
+            self.n = 2 ** len(good) - 1
+            print('Setting number of iterations to {0}'.format(self.n))
         for i in range(self.n):
 
             # open log
@@ -181,6 +195,11 @@ class fcmab(object):
                 ucb_std.append(ucb_s)
                 self.ucb_n[k] += 1
                 c = th[k]
+            elif self.c.lower() == 'allgood':
+                self.model.S = np.array([False] * self.nc)
+                bi = numberToBase(i+1, 2)
+                print(bi)
+                self.model.S[good] = [x == 1 for x in bi]
             else:
                 raise Exception('Cutoff not implemented.')
 
@@ -192,67 +211,12 @@ class fcmab(object):
             s_list.append(self.model.S)
 
             # adjust weights
-            if self.verbose:
-                print('Iter\tEpoch\tLoss')
-            self.model.train()
-            for epoch in range(self.epochs):
-                for j, data in enumerate(train_loader):
+            train_loader, val_loader = self.train_iter(train_loader, val_loader, i)
 
-                    if j == 0 and epoch == 0 and self.verbose:
-                        X, y = data[:-1], data[-1]
-                        for l in range(self.nc):
-                            print('x{0}: {1}'.format(l, X[l]))
-                        print('y: {0}'.format(y))
+            best_acc, best_iter = self.model_eval(train_loader, val_loader, tr_acc_list, val_acc_list, best_acc,
+                                                  best_iter)
 
-                    _, l, _ = self.model_loss(data)
-
-                    self.opt.zero_grad()
-                    l.backward()
-                    self.opt.step()
-
-                if self.verbose:
-                    tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
-                    print("%d\t%d\t%f" % (i, epoch, tr_loss))
-
-                if self.adversarial is not None and self.adv_epoch > 1:
-                    for ep in range(self.adv_epoch):
-                        train_loader = self.adversary(train_loader, ep)
-                        val_loader = self.adversary(val_loader, ep)
-                        if self.verbose:
-                            tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
-                            print("%s\t%d\t%f" % ('A{0}'.format(ep), epoch, tr_loss))
-                elif self.adversarial is not None:
-                    train_loader = self.adversary(train_loader, epoch)
-                    val_loader = self.adversary(val_loader, epoch)
-                    if self.verbose:
-                        tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
-                        print("%s\t%d\t%f" % ('Adv', epoch, tr_loss))
-
-                # scheduler.step()
-                self.save()
-
-            self.model.eval()
-
-            # compute training accuracy
-            _, tr_acc = self.loss_acc(train_loader, head=self.head + '_tr')
-            tr_acc_list.append(tr_acc)
-
-            # compute validation accuracy
-            val_loss, val_acc = self.loss_acc(val_loader, head=self.head + '_val')
-            val_acc_list.append(val_acc)
-
-            # keep best model
-            print("current: %f, best: %f" % (val_acc, best_acc))
-            if self.keep_best and val_acc > best_acc:
-                best_acc = val_acc
-                self.save(head=self.head + '_best')
-                best_iter = i
-                print('new high!')
-
-            str_s = str(self.model.S)
-            all_s = str_s if all(self.model.S) else all_s
-            if str_s not in self.best_models.keys() or self.best_models[str_s] < val_acc:
-                self.best_models[str_s] = val_acc
+            all_s = str(self.model.S) if all(self.model.S) else all_s
 
             # compute rewards
             if self.m == 0:
@@ -296,13 +260,87 @@ class fcmab(object):
             log_file.close()  # close log file
             sys.stdout = old_stdout  # reset output
 
+        stop = time.time() - start
+        timeHMS(stop)
+
+        self.results(train_loader, test_loader, best_iter, all_s)
+
+        if self.plot:
+            self.plots(tr_acc_list, val_acc_list, map_list, theta_list, s_list, ucb_list, ucb_mean, ucb_std)
+
+    def train_iter(self, train_loader, val_loader, i):
+        if self.verbose:
+            print('Iter\tEpoch\tLoss')
+
+        self.model.train()
+        for epoch in range(self.epochs):
+            for j, data in enumerate(train_loader):
+
+                if j == 0 and epoch == 0 and self.verbose:
+                    X, y = data[:-1], data[-1]
+                    for l in range(self.nc):
+                        print('x{0}: {1}'.format(l, X[l]))
+                    print('y: {0}'.format(y))
+
+                _, l, _ = self.model_loss(data)
+
+                self.opt.zero_grad()
+                l.backward()
+                self.opt.step()
+
+        if self.verbose:
+            tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
+            print("%d\t%d\t%f" % (i, epoch, tr_loss))
+
+        if self.adversarial is not None and self.adv_epoch > 1:
+            for ep in range(self.adv_epoch):
+                train_loader = self.adversary(train_loader, ep)
+                val_loader = self.adversary(val_loader, ep)
+                if self.verbose:
+                    tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
+                    print("%s\t%d\t%f" % ('A{0}'.format(ep), epoch, tr_loss))
+        elif self.adversarial is not None:
+            train_loader = self.adversary(train_loader, epoch)
+            val_loader = self.adversary(val_loader, epoch)
+            if self.verbose:
+                tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
+                print("%s\t%d\t%f" % ('Adv', epoch, tr_loss))
+
+        # scheduler.step()
+        self.save()
+
+        return train_loader, val_loader
+
+    def model_eval(self, train_loader, val_loader, tr_acc_list, val_acc_list, best_acc, best_iter):
+        self.model.eval()
+
+        # compute training accuracy
+        _, tr_acc = self.loss_acc(train_loader, head=self.head + '_tr')
+        tr_acc_list.append(tr_acc)
+
+        # compute validation accuracy
+        val_loss, val_acc = self.loss_acc(val_loader, head=self.head + '_val')
+        val_acc_list.append(val_acc)
+
+        # keep best model
+        print("current: %f, best: %f" % (val_acc, best_acc))
+        if self.keep_best and val_acc > best_acc:
+            best_acc = val_acc
+            self.save(head=self.head + '_best')
+            best_iter = i
+            print('new high!')
+
+        str_s = str(self.model.S)
+        if str_s not in self.best_models.keys() or self.best_models[str_s] < val_acc:
+            self.best_models[str_s] = val_acc
+
+        return best_acc, best_iter
+
+    def results(self, train_loader, test_loader, best_iter, all_s=None):
         # open log
         old_stdout = sys.stdout  # save old output
         log_file = open('./logs/' + self.head + '.log', 'a')  # open log file
         sys.stdout = log_file  # write to log file
-
-        stop = time.time() - start
-        timeHMS(stop)
 
         print('Results:')
         if self.keep_best:
@@ -335,102 +373,104 @@ class fcmab(object):
         log_file.close()  # close log file
         sys.stdout = old_stdout  # reset output
 
-        if self.plot:
-            check_folder('./plots')
+    def plots(self, tr_acc_list, val_acc_list, map_list, theta_list, s_list, ucb_list, ucb_mean, ucb_std):
+        check_folder('./plots')
 
-            # accuracy plot
-            plt.plot(tr_acc_list, label='Training')
-            plt.plot(val_acc_list, label='Validation')
-            plt.title('Accuracy')
+        # accuracy plot
+        plt.plot(tr_acc_list, label='Training')
+        plt.plot(val_acc_list, label='Validation')
+        plt.title('Accuracy')
+        plt.xlabel("Iterations")
+        plt.ylabel("Accuracy")
+        plt.legend()
+        plt.savefig('./plots/' + self.head + '_acc.png')
+        plt.clf()
+        plt.close()
+
+        # map plot
+        map_list = np.array(map_list)
+        for i in range(map_list.shape[1]):
+            plt.plot(map_list[:, i], label=str(i))
+        plt.title('MAP')
+        plt.xlabel("Iterations")
+        plt.ylabel("MAP")
+        plt.legend()
+        plt.savefig('./plots/' + self.head + '_map.png')
+        plt.clf()
+        plt.close()
+
+        # Theta plot
+        theta_list = np.array(theta_list)
+        for i in range(theta_list.shape[1]):
+            plt.plot(theta_list[:, i], label=str(i))
+        plt.title(r"$\theta$")
+        plt.xlabel("Iterations")
+        plt.ylabel(r"$\theta$")
+        plt.legend()
+        plt.savefig('./plots/' + self.head + '_theta.png')
+        plt.clf()
+        plt.close()
+
+        # number of clients
+        s_list = np.transpose(np.array(s_list).astype('int'))
+        print(np.sum(s_list, axis=0))
+        plt.plot(np.sum(s_list, axis=0))
+        plt.title('Number of Clients')
+        plt.xlabel("Iterations")
+        plt.ylabel("Number of Clients")
+        plt.ylim(0, self.nc)
+        plt.savefig('./plots/' + self.head + '_numclients.png')
+        plt.clf()
+        plt.close()
+
+        # subset plot
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.imshow(-s_list, aspect='auto', cmap=plt.cm.gray, interpolation='nearest')
+        plt.title('Clients')
+        plt.xlabel("Iterations")
+        plt.ylabel("Client")
+        ticks = np.arange(s_list.shape[0])
+        ax.set_yticks(ticks)
+        ax.set_yticklabels(ticks)
+        plt.savefig('./plots/' + self.head + '_clients.png')
+        plt.clf()
+        plt.close()
+
+        if 'mab' in self.c.lower():
+            # UCB plots
+            ucb_list = np.array(ucb_list)
+            for i in range(ucb_list.shape[1]):
+                plt.plot(ucb_list[:, i], label=str(i + 1))
+            plt.title("Acquisition Cost")
             plt.xlabel("Iterations")
-            plt.ylabel("Accuracy")
+            plt.ylabel("Acquisition Cost")
             plt.legend()
-            plt.savefig('./plots/' + self.head + '_acc.png')
+            plt.savefig('./plots/' + self.head + '_ucb.png')
             plt.clf()
             plt.close()
 
-            # map plot
-            map_list = np.array(map_list)
-            for i in range(map_list.shape[1]):
-                plt.plot(map_list[:, i], label=str(i))
-            plt.title('MAP')
+            ucb_mean = np.array(ucb_mean)
+            for i in range(ucb_mean.shape[1]):
+                plt.plot(ucb_mean[:, i], label=str(i + 1))
+            plt.title("Acquisition Cost Mean")
             plt.xlabel("Iterations")
-            plt.ylabel("MAP")
+            plt.ylabel("Acquisition Cost")
             plt.legend()
-            plt.savefig('./plots/' + self.head + '_map.png')
+            plt.savefig('./plots/' + self.head + '_ucb_mean.png')
             plt.clf()
             plt.close()
 
-            # Theta plot
-            theta_list = np.array(theta_list)
-            for i in range(theta_list.shape[1]):
-                plt.plot(theta_list[:, i], label=str(i))
-            plt.title(r"$\theta$")
+            ucb_std = np.array(ucb_std)
+            for i in range(ucb_std.shape[1]):
+                plt.plot(ucb_std[:, i], label=str(i + 1))
+            plt.title("Acquisition Cost Standard Deviation")
             plt.xlabel("Iterations")
-            plt.ylabel(r"$\theta$")
+            plt.ylabel("Acquisition Cost")
             plt.legend()
-            plt.savefig('./plots/' + self.head + '_theta.png')
+            plt.savefig('./plots/' + self.head + '_ucb_std.png')
             plt.clf()
             plt.close()
-
-            # subset plot
-            s_list = -np.transpose(np.array(s_list).astype('int'))
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            ax.imshow(s_list, aspect='auto', cmap=plt.cm.gray, interpolation='nearest')
-            plt.title('Clients')
-            plt.xlabel("Iterations")
-            plt.ylabel("Client")
-            ticks = np.arange(s_list.shape[0])
-            ax.set_yticks(ticks)
-            ax.set_yticklabels(ticks)
-            plt.savefig('./plots/' + self.head + '_clients.png')
-            plt.clf()
-            plt.close()
-
-            plt.plot(np.sum(s_list, axis=0))
-            plt.title('Number of Clients')
-            plt.xlabel("Iterations")
-            plt.ylabel("Number of Clients")
-            plt.ylim(0, self.nc)
-            plt.savefig('./plots/' + self.head + '_numclients.png')
-            plt.clf()
-            plt.close()
-
-            if 'mab' in self.c.lower():
-                # UCB plots
-                ucb_list = np.array(ucb_list)
-                for i in range(ucb_list.shape[1]):
-                    plt.plot(ucb_list[:, i], label=str(i+1))
-                plt.title("Acquisition Cost")
-                plt.xlabel("Iterations")
-                plt.ylabel("Acquisition Cost")
-                plt.legend()
-                plt.savefig('./plots/' + self.head + '_ucb.png')
-                plt.clf()
-                plt.close()
-
-                ucb_mean = np.array(ucb_mean)
-                for i in range(ucb_mean.shape[1]):
-                    plt.plot(ucb_mean[:, i], label=str(i + 1))
-                plt.title("Acquisition Cost Mean")
-                plt.xlabel("Iterations")
-                plt.ylabel("Acquisition Cost")
-                plt.legend()
-                plt.savefig('./plots/' + self.head + '_ucb_mean.png')
-                plt.clf()
-                plt.close()
-
-                ucb_std = np.array(ucb_std)
-                for i in range(ucb_std.shape[1]):
-                    plt.plot(ucb_std[:, i], label=str(i + 1))
-                plt.title("Acquisition Cost Standard Deviation")
-                plt.xlabel("Iterations")
-                plt.ylabel("Acquisition Cost")
-                plt.legend()
-                plt.savefig('./plots/' + self.head + '_ucb_std.png')
-                plt.clf()
-                plt.close()
 
     def model_loss(self, data, adversarial=False):
         X, y = data[:-1], data[-1]

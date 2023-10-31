@@ -5,7 +5,7 @@ from sklearn.linear_model import LogisticRegression
 from itertools import chain
 
 
-fl = 'none'  # none, horizontal, or vertical
+fl = 'horizontal'  # none, horizontal, or vertical
 plus = True
 adv_valid = True
 rand_init = True
@@ -16,12 +16,13 @@ test_size, valid_size = 0.2, 0.2
 seed = 1226
 model = LogisticRegression(max_iter=inner)
 modelC = LogisticRegression(max_iter=inner)
-head = 'IBMU410c_Sh'
+head = 'IBMU410c3a_Sh'
 adv_opt = 'adam'
 adv_beta = (0.9, 0.999)
 adv_eps = 1e-8
 alpha = 0.001
 undersample = 4
+adv_c = [0, 1, 2]
 
 np.random.seed(seed)
 
@@ -127,9 +128,9 @@ for sh in [1, 81, 171, 251, 341]:
     print('shared: {0}'.format(shared))
 
     adv = shared
-    c0, c1 = None, None
+    c0, c1 = c, None
 
     advLogReg(X, X_valid, X_test, y, y_valid, y_test, fl, adv_valid, rand_init, epochs, inner, fill, adv_opt, adv_beta,
-              adv_eps, alpha, c0, c1, shared, adv, model, modelC, head + str(sh))
+              adv_eps, alpha, c0, c1, shared, adv, model, modelC, head + str(sh), adv_c)
 
 

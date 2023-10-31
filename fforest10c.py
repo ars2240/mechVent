@@ -18,7 +18,7 @@ for sh in range(2, 13, 10):
     print(c)
 
     # tr_loader, val_loader, te_loader = forest_loader(batch_size=128, c=c, adv=adv, adv_valid=True)
-    tr_loader, val_loader, te_loader = adv_loader(batch_size=128, c=c, adv=adv, head='Forest10c_Sh' + str(sh) + '_best')
+    tr_loader, val_loader, te_loader = adv_loader(batch_size=128, c=c, adv=adv, head='Forest10c_Sh' + str(sh))
     model = FLNSH(feats=c, nc=10, classes=7)
     opt = torch.optim.Adam(model.parameters())
     loss = nn.CrossEntropyLoss()

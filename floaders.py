@@ -319,18 +319,162 @@ def adv_forest_loader(batch_size=1, num_workers=0, pin_memory=True, split=None, 
     return train_loader, valid_loader, test_loader
 
 
-def adv_loader(batch_size=1, num_workers=0, pin_memory=True, head='advLogReg', c=[], adv=[]):
+def split_x(X, X_adv, nc, c, adv, compress):
+    x = [None] * nc
+    for i in range(nc):
+        x[i] = X[:, c[i]]
+
+    if isinstance(adv, list):
+        la = len(adv)
+    elif isinstance(adv, dict):
+        la = len(adv[list(adv.keys())[0]])
+    else:
+        raise Exception('Invalid adversary type.')
+
+    if isinstance(adv, list) and la > 0 and compress:
+        x[0][:, -la:] = X_adv
+    elif isinstance(adv, list) and la > 0:
+        for a in range(1, nc):
+            x[a][:, -la:] = X[:, -la:]
+    elif isinstance(adv, dict) and compress:
+        xs = X.shape[0]
+        for a in adv.keys():
+            x[a][:, -la:] = X_adv[(xs * a):(xs * (a + 1)), :]
+    elif isinstance(adv, dict):
+        for a in range(0, nc):
+            if a not in adv.keys():
+                x[a][:, -la:] = X[:, -la:]
+    return x
+
+
+def adv_loader(batch_size=1, num_workers=0, pin_memory=True, head='advLogReg', c=[], adv=[], best=True, state=1226,
+               compress=False, test_size=0.2, valid_size=0.2, classes=2, undersample=4):
 
     check_folder('./data/')
+    np.random.seed(state)
 
     # import data
-    X = np.genfromtxt('./data/' + head + '.csv', delimiter=',')
-    y = np.genfromtxt('./data/' + head + '_y.csv', delimiter=',')
+    if compress and 'NI' in head:
+        if '+' in head:
+            filename2 = './data/NSL-KDD/KDDTrain+.txt'
+            filename3 = './data/NSL-KDD/KDDTest+.txt'
+        else:
+            u = 'http://kdd.ics.uci.edu/databases/kddcup99/kddcup.data.gz'
+            filename2 = download(u)
+            u = 'http://kdd.ics.uci.edu/databases/kddcup99/corrected.gz'
+            filename3 = download(u)
 
-    X_valid = np.genfromtxt('./data/' + head + '_valid.csv', delimiter=',')
-    y_valid = np.genfromtxt('./data/' + head + '_y_valid.csv', delimiter=',')
-    X_test = np.genfromtxt('./data/' + head + '_test.csv', delimiter=',')
-    y_test = np.genfromtxt('./data/' + head + '_y_test.csv', delimiter=',')
+        # import dataset
+        train = pd.read_csv(filename2, header=None)
+        test = pd.read_csv(filename3, header=None)
+
+        if '+' in head:
+            train.drop(columns=train.columns[-1], axis=1, inplace=True)
+            test.drop(columns=test.columns[-1], axis=1, inplace=True)
+
+        # transform to supercategories
+        i = train.shape[1] - 1
+        if classes == 2:
+            """
+            dic = {'normal.': 'normal', 'land.': 'dos', 'pod.': 'dos', 'teardrop.': 'dos', 'back.': 'dos',
+                   'neptune.': 'dos', 'smurf.': 'dos'}
+            """
+            dic = {key: 'attack' for key in train[i].unique()}
+            dic['normal'] = 'normal'
+        elif classes == 5:
+            dic = {'normal.': 'normal', 'nmap.': 'probing', 'portsweep.': 'probing', 'ipsweep.': 'probing',
+                   'satan.': 'probing', 'land.': 'dos', 'pod.': 'dos', 'teardrop.': 'dos', 'back.': 'dos',
+                   'neptune.': 'dos', 'smurf.': 'dos', 'spy.': 'r2l', 'phf.': 'r2l', 'multihop.': 'r2l',
+                   'ftp_write.': 'r2l', 'imap.': 'r2l', 'warezmaster.': 'r2l', 'guess_passwd.': 'r2l',
+                   'buffer_overflow.': 'u2r', 'rootkit.': 'u2r', 'loadmodule.': 'u2r', 'perl.': 'u2r'}
+        else:
+            raise Exception('Invalid number of classes')
+        train = train.loc[train[i].isin(dic.keys())]
+        train.replace({i: dic}, inplace=True)
+        test = test.loc[test[i].isin(dic.keys())]
+        test.replace({i: dic}, inplace=True)
+
+        train_len = train.shape[0]  # save length of training set
+        train = pd.concat([train, test], ignore_index=True)
+        train.columns = cols_orig
+        inputs = pd.get_dummies(train)  # convert objects to one-hot encoding
+        train_feat = inputs.shape[1] - classes  # number of features
+
+        X = inputs.values[:train_len, :-classes]
+        y_onehot = inputs.values[:train_len, -classes:]
+        y = np.asarray([np.where(r == 1)[0][0] for r in y_onehot])  # convert from one-hot to integer encoding
+
+        X_test = inputs.values[train_len:, :-classes]
+        y_test_onehot = inputs.values[train_len:, -classes:]
+        y_test = np.asarray([np.where(r == 1)[0][0] for r in y_test_onehot])  # convert from one-hot to integer encoding
+
+        X = X.reshape((train_len, train_feat))
+        X_test = X_test.reshape((test.shape[0], train_feat))
+
+        X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
+    elif compress and 'IBM' in head:
+        filename = './data/IBM.csv'
+
+        # import dataset
+        df = pd.read_csv(filename, header=None)
+        df.drop(columns=df.columns[0], axis=1, inplace=True)
+
+        # undersample dominant class
+        ccol = df.columns[-1]
+        if undersample is not None:
+            df_0 = df[~df[ccol]]
+            df_1 = df[df[ccol]]
+            df_0_under = df_0.sample(undersample * df_1.shape[0], random_state=seed)
+            df = pd.concat([df_0_under, df_1], axis=0)
+        df[ccol] = df[ccol].replace({True: 1, False: 0})
+
+        # split classes & features
+        X = df.values[:, :-1]
+        y = df.values[:, -1]
+
+        # one-hot encode categorical variables
+        X = pd.DataFrame(X)
+        int_vals = np.array([X[col].apply(float.is_integer).all() for col in X.columns])
+        nunique = np.array(X.nunique())
+        cols = np.where(np.logical_and(np.logical_and(2 < nunique, nunique < 10), int_vals))[0]
+        X = pd.get_dummies(X, columns=X.columns[cols])  # convert objects to one-hot encoding
+        X = X.to_numpy()
+
+        X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=seed)
+        X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=seed)
+    elif compress and 'Forest' in head or 'Cov' in head:
+        u = 'https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz'
+        filename2 = download(u)
+
+        # import dataset
+        data = pd.read_csv(filename2, header=None)
+
+        X = data.values[:, :-1]
+        X = X.reshape((X.shape[0], 54))
+        y = data.values[:, -1] - 1
+
+        X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=state)
+        X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
+    elif compress:
+        raise Exception('Compression not implemented')
+
+    headx = head + '_best' if best else head
+    if compress:
+        X_adv = np.genfromtxt('./data/' + headx + '.csv', delimiter=',')
+        X_valid_adv = np.genfromtxt('./data/' + headx + '_valid.csv', delimiter=',')
+        X_test_adv = np.genfromtxt('./data/' + headx + '_test.csv', delimiter=',')
+        if X_adv.ndim == 1:
+            X_adv = np.expand_dims(X_adv, axis=1)
+            X_valid_adv = np.expand_dims(X_valid_adv, axis=1)
+            X_test_adv = np.expand_dims(X_test_adv, axis=1)
+    else:
+        X = np.genfromtxt('./data/' + headx + '.csv', delimiter=',')
+        y = np.genfromtxt('./data/' + head + '_y.csv', delimiter=',')
+        X_valid = np.genfromtxt('./data/' + headx + '_valid.csv', delimiter=',')
+        y_valid = np.genfromtxt('./data/' + head + '_y_valid.csv', delimiter=',')
+        X_test = np.genfromtxt('./data/' + headx + '_test.csv', delimiter=',')
+        y_test = np.genfromtxt('./data/' + head + '_y_test.csv', delimiter=',')
+        X_adv, X_valid_adv, X_test_adv = None, None, None
 
     # convert data-types
     X = torch.from_numpy(X).float()
@@ -339,40 +483,17 @@ def adv_loader(batch_size=1, num_workers=0, pin_memory=True, head='advLogReg', c
     y_test = torch.from_numpy(y_test).long()
     X_valid = torch.from_numpy(X_valid).float()
     y_valid = torch.from_numpy(y_valid).long()
+    if compress:
+        X_adv = torch.from_numpy(X_adv).float()
+        X_valid_adv = torch.from_numpy(X_valid_adv).float()
+        X_test_adv = torch.from_numpy(X_test_adv).float()
 
     nc = len(c)
-    x = [None] * nc
-    for i in range(nc):
-        x[i] = X[:, c[i]]
-    if isinstance(adv, list) and len(adv) > 0:
-        la = len(adv)
-        for a in range(1, nc):
-            x[a][:, -la:] = X[:, -la:]
-    elif isinstance(adv, dict):
-        la = len(adv[list(adv.keys())[0]])
-        for a in range(0, nc):
-            if a not in adv.keys():
-                x[a][:, -la:] = X[:, -la:]
+    x = split_x(X, X_adv, nc, c, adv, compress)
     train_data = utils_data.TensorDataset(*x, y)
-    for i in range(nc):
-        x[i] = X_valid[:, c[i]]
-    if isinstance(adv, list) and len(adv) > 0:
-        for a in range(1, nc):
-            x[a][:, -la:] = X_valid[:, -la:]
-    elif isinstance(adv, dict):
-        for a in range(0, nc):
-            if a not in adv.keys():
-                x[a][:, -la:] = X_valid[:, -la:]
+    x = split_x(X_valid, X_valid_adv, nc, c, adv, compress)
     valid_data = utils_data.TensorDataset(*x, y_valid)
-    for i in range(nc):
-        x[i] = X_test[:, c[i]]
-    if isinstance(adv, list) and len(adv) > 0:
-        for a in range(1, nc):
-            x[a][:, -la:] = X_test[:, -la:]
-    elif isinstance(adv, dict):
-        for a in range(0, nc):
-            if a not in adv.keys():
-                x[a][:, -la:] = X_test[:, -la:]
+    x = split_x(X_test, X_test_adv, nc, c, adv, compress)
     test_data = utils_data.TensorDataset(*x, y_test)
 
     train_loader = utils_data.DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
