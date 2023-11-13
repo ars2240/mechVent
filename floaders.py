@@ -424,7 +424,7 @@ def adv_loader(batch_size=1, num_workers=0, pin_memory=True, head='advLogReg', c
         if undersample is not None:
             df_0 = df[~df[ccol]]
             df_1 = df[df[ccol]]
-            df_0_under = df_0.sample(undersample * df_1.shape[0], random_state=seed)
+            df_0_under = df_0.sample(undersample * df_1.shape[0], random_state=state)
             df = pd.concat([df_0_under, df_1], axis=0)
         df[ccol] = df[ccol].replace({True: 1, False: 0})
 
@@ -440,8 +440,8 @@ def adv_loader(batch_size=1, num_workers=0, pin_memory=True, head='advLogReg', c
         X = pd.get_dummies(X, columns=X.columns[cols])  # convert objects to one-hot encoding
         X = X.to_numpy()
 
-        X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=seed)
-        X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=seed)
+        X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size, random_state=state)
+        X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size, random_state=state)
     elif compress and 'Forest' in head or 'Cov' in head:
         u = 'https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz'
         filename2 = download(u)

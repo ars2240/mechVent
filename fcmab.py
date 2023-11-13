@@ -50,7 +50,7 @@ def numberToBase(n, b):
 class fcmab(object):
     def __init__(self, model, loss, opt, nc=2, n=10, epochs=10, c=.5, keep_best=True, seed=1226, head='',
                  conf_matrix=False, adversarial=None, adv_epoch=1, adv_opt='sgd', adv_beta=(0.9, 0.999), adv_eps=1e-8,
-                 adv_step=1, plot=True, m=0, ab=0, ucb_c=1, xdim=1, verbose=False):
+                 adv_step=1, adv_c=[], plot=True, m=0, ab=0, ucb_c=1, xdim=1, verbose=False):
 
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -78,6 +78,7 @@ class fcmab(object):
         self.adv_eps = adv_eps  # adversarial epsilon (for Adam optimizer)
         self.adv_m, self.adv_v = {}, {}  # adversarial moments (for Adam optimizer)
         self.adv_step = adv_step  # step size of adversary
+        self.adv_c = adv_c  # adversarial clients for "all good" clients iteration
         self.plot = plot  # if validation accuracy is plotted
         self.m = m  # type of reward function
         self.ab = ab  # type of alpha/beta update
@@ -98,7 +99,7 @@ class fcmab(object):
         log_file.close()  # close log file
         sys.stdout = old_stdout  # reset output
 
-        best_acc, best_iter, all_s = 0, 'N/A', None
+        best_acc, best_iter, all_s, good_s = 0, 'N/A', None, None
         map = 0.5
         tr_acc_list, val_acc_list, map_list, s_list, theta_list = [], [], [], [], []
         ucb_list, ucb_mean, ucb_std = [], [], []
@@ -114,9 +115,10 @@ class fcmab(object):
             B = [np.zeros((self.xdim, self.nc)) for _ in range(self.nc)]
             b = [np.zeros((self.xdim, 1)) for _ in range(self.nc)]
         elif self.c.lower() == 'allgood':
-            good = [c for c in range(self.nc) if c not in self.adversarial]
+            good = [c for c in range(self.nc) if c not in self.adv_c]
             self.n = 2 ** len(good) - 1
             print('Setting number of iterations to {0}'.format(self.n))
+        good_v = [c not in self.adv_c for c in range(self.nc)]
         for i in range(self.n):
 
             # open log
@@ -199,7 +201,7 @@ class fcmab(object):
                 self.model.S = np.array([False] * self.nc)
                 bi = numberToBase(i+1, 2)
                 print(bi)
-                self.model.S[good] = [x == 1 for x in bi]
+                self.model.S[good[-len(bi):]] = [x == 1 for x in bi]
             else:
                 raise Exception('Cutoff not implemented.')
 
@@ -213,10 +215,11 @@ class fcmab(object):
             # adjust weights
             train_loader, val_loader = self.train_iter(train_loader, val_loader, i)
 
-            best_acc, best_iter = self.model_eval(train_loader, val_loader, tr_acc_list, val_acc_list, best_acc,
-                                                  best_iter)
+            val_acc, best_acc, best_iter = self.model_eval(train_loader, val_loader, tr_acc_list, val_acc_list,
+                                                           best_acc, best_iter, i)
 
             all_s = str(self.model.S) if all(self.model.S) else all_s
+            good_s = str(self.model.S) if all(self.model.S == good_v) else good_s
 
             # compute rewards
             if self.m == 0:
@@ -260,10 +263,18 @@ class fcmab(object):
             log_file.close()  # close log file
             sys.stdout = old_stdout  # reset output
 
+        old_stdout = sys.stdout  # save old output
+        log_file = open('./logs/' + self.head + '.log', 'a')  # open log file
+        sys.stdout = log_file  # write to log file
+
         stop = time.time() - start
         timeHMS(stop)
 
-        self.results(train_loader, test_loader, best_iter, all_s)
+        # close log
+        log_file.close()  # close log file
+        sys.stdout = old_stdout  # reset output
+
+        self.results(train_loader, test_loader, best_acc, best_iter, all_s, good_s)
 
         if self.plot:
             self.plots(tr_acc_list, val_acc_list, map_list, theta_list, s_list, ucb_list, ucb_mean, ucb_std)
@@ -311,7 +322,7 @@ class fcmab(object):
 
         return train_loader, val_loader
 
-    def model_eval(self, train_loader, val_loader, tr_acc_list, val_acc_list, best_acc, best_iter):
+    def model_eval(self, train_loader, val_loader, tr_acc_list, val_acc_list, best_acc, best_iter, i):
         self.model.eval()
 
         # compute training accuracy
@@ -334,9 +345,9 @@ class fcmab(object):
         if str_s not in self.best_models.keys() or self.best_models[str_s] < val_acc:
             self.best_models[str_s] = val_acc
 
-        return best_acc, best_iter
+        return val_acc, best_acc, best_iter
 
-    def results(self, train_loader, test_loader, best_iter, all_s=None):
+    def results(self, train_loader, test_loader, best_acc, best_iter, all_s=None, good_s=None):
         # open log
         old_stdout = sys.stdout  # save old output
         log_file = open('./logs/' + self.head + '.log', 'a')  # open log file
@@ -364,10 +375,11 @@ class fcmab(object):
             print("%s\t%f\t%f\t%f\t%f\t%f" % (config, train_acc, test_acc, self.best_models[bth], self.best_models[c0],
                                               self.best_models[c1]))
         else:
-            print('Config\tTrAcc\tTeAcc\tValAcc\tAllAcc')
+            print('Config\tTrAcc\tTeAcc\tValAcc\tAllAcc\tGoodAcc')
             config = 'All Clients' if all(self.model.S) else 'Clients {0}'.format(cc)
-            all_acc = '' if all_s is None else str(self.best_models[all_s])
-            print("%s\t%f\t%f\t%f\t%s" % (config, train_acc, test_acc, best_acc, all_acc))
+            all_acc = '' if all_s is None else '{0}'.format(self.best_models[all_s])
+            good_acc = '' if good_s is None else '{0}'.format(self.best_models[good_s])
+            print("%s\t%f\t%f\t%f\t%s\t%s" % (config, train_acc, test_acc, best_acc, all_acc, good_acc))
 
         # close log
         log_file.close()  # close log file
@@ -413,7 +425,6 @@ class fcmab(object):
 
         # number of clients
         s_list = np.transpose(np.array(s_list).astype('int'))
-        print(np.sum(s_list, axis=0))
         plt.plot(np.sum(s_list, axis=0))
         plt.title('Number of Clients')
         plt.xlabel("Iterations")

@@ -26,12 +26,13 @@ for sh in range(1, 42, 10):
         c[i].extend(shared)
     print(c)
 
-    # tr_loader, val_loader, te_loader = ni_loader(batch_size=128, c=c, adv=adv, adv_valid=True)
-    tr_loader, val_loader, te_loader = adv_loader(batch_size=128, c=c, adv=adv, head='NI+10c3a_Sh' + str(sh),
-                                                  compress=True)
+    tr_loader, val_loader, te_loader = ni_loader(batch_size=128, c=c, adv=adv, adv_valid=True)
+    # tr_loader, val_loader, te_loader = adv_loader(batch_size=128, c=c, adv=adv, head='NI+10c3a_Sh' + str(sh),
+                                                  # compress=True)
     model = FLNSH(feats=c, nc=10, classes=2)
     opt = torch.optim.Adam(model.parameters())
     loss = nn.CrossEntropyLoss()
 
-    cmab = fcmab(model, loss, opt, nc=10, n=100, c='mabLin', head=head + '_FLNSH10c3a_AdvHztl', verbose=True)
+    cmab = fcmab(model, loss, opt, nc=10, n=100, c='allgood', head=head + '_FLNSH10c3a_allgood_Pert',
+                 adv_c=[0, 1, 2], verbose=True)
     cmab.train(tr_loader, val_loader, te_loader)

@@ -67,7 +67,7 @@ def adversary_adam(model, X, y, j, m, v, enc, adv_beta, adv_eps, alpha, shared, 
 
 def advLogReg(X, X_valid, X_test, y, y_valid, y_test, fl='none', adv_valid=True, rand_init=True, epochs=100, inner=100,
               fill=0, adv_opt='adam', adv_beta=(0.9, 0.999), adv_eps=1e-8, alpha=0.001, c0=None, c1=None, shared=[],
-              adv=[], model=None, modelC=None, head='', adv_c=[], compress=True):
+              adv=[], model=None, modelC=None, head='', adv_c=[], compress=True, half=False):
     if model is None:
         model = LogisticRegression(max_iter=inner)
     if modelC is None:
@@ -84,6 +84,8 @@ def advLogReg(X, X_valid, X_test, y, y_valid, y_test, fl='none', adv_valid=True,
     X = scaler.transform(X)
     X_valid = scaler.transform(X_valid)
     X_test = scaler.transform(X_test)
+    if half:
+        X, X_valid, X_test = X.astype('half'), X_valid.astype('half'), X_test.astype('half')
     os = [len(y), len(y_valid), len(y_test)]
 
     multi = y.max() > 1
@@ -129,7 +131,11 @@ def advLogReg(X, X_valid, X_test, y, y_valid, y_test, fl='none', adv_valid=True,
     loss, lossH, lossC = [], [], []
     best_acc = 1
     best_model = None
-    X_best, X_valid_best, X_test_best = X.copy(), X_valid.copy(), X_test.copy()
+    if half:
+        X_best, X_valid_best, X_test_best = X.copy().astype('half'), X_valid.copy().astype('half'), \
+            X_test.copy().astype('half')
+    else:
+        X_best, X_valid_best, X_test_best = X.copy(), X_valid.copy(), X_test.copy()
     m, v, m_valid, v_valid, m_test, v_test = 0, 0, 0, 0, 0, 0
     for i in range(epochs):
         model.fit(X, y)
@@ -138,21 +144,33 @@ def advLogReg(X, X_valid, X_test, y, y_valid, y_test, fl='none', adv_valid=True,
         for j in range(inner):
             if adv_opt.lower() == 'sgd':
                 X = adversary(model, X, y, enc, alpha, shared, adv, fl)
+                if half:
+                    X = X.astype('half')
                 if adv_valid:
                     X_valid = adversary(model, X_valid, y_valid, enc, alpha, shared, adv, fl)
                     X_test = adversary(model, X_test, y_test, enc, alpha, shared, adv, fl)
+                    if half:
+                        X_valid, X_test = X_valid.astype('half'), X_test.astype('half')
             elif adv_opt.lower() == 'adam':
                 X, m, v = adversary_adam(model, X, y, j, m, v, enc, adv_beta, adv_eps, alpha, shared, adv, fl)
+                if half:
+                    X = X.astype('half')
                 if adv_valid:
                     X_valid, m_valid, v_valid = adversary_adam(model, X_valid, y_valid, j, m_valid, v_valid, enc,
                                                                adv_beta, adv_eps, alpha, shared, adv, fl)
                     X_test, m_test, v_test = adversary_adam(model, X_test, y_test, j, m_test, v_test, enc, adv_beta,
                                                             adv_eps, alpha, shared, adv, fl)
+                    if half:
+                        X_valid, X_test = X_valid.astype('half'), X_test.astype('half')
         l = model.score(X_valid, y_valid)
         if l < best_acc:
             best_acc = l
             best_model = model
-            X_best, X_valid_best, X_test_best = X.copy(), X_valid.copy(), X_test.copy()
+            if half:
+                X_best, X_valid_best, X_test_best = X.copy().astype('half'), X_valid.copy().astype('half'), \
+                    X_test.copy().astype('half')
+            else:
+                X_best, X_valid_best, X_test_best = X.copy(), X_valid.copy(), X_test.copy()
         loss.append(l)
         if fl.lower() == 'none':
             modelC.fit(np.concatenate((X, X_ag), axis=1), y)
