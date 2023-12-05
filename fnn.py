@@ -218,20 +218,25 @@ class FLRHZ(nn.Module):
         self.v = torch.zeros(nc, classes).requires_grad_()  # fill-in
         self.S = torch.zeros(nc)  # set of clients
 
-    def forward(self, x):
+    def forward(self, x, client=None):
 
         if len(x) != self.nc:
             raise Exception('Invalid number of inputs.')
 
-        fl = [None] * self.nc
-        for i in range(self.nc):
-            x2 = x[i]
+        if client is None:
+            fl = [None] * self.nc
+            for i in range(self.nc):
+                x2 = x[i]
+                s = x2.shape[0]
+                x2 = x2.reshape(s, -1)
+                fl[i] = self.f(self.loc[i](x2)) if self.S[i] else self.v[i].repeat(s, 1)
+
+            x = sum(fl)
+        else:
+            x2 = x[client]
             s = x2.shape[0]
             x2 = x2.reshape(s, -1)
-            fl[i] = self.f(self.loc[i](x2)) if self.S[i] else self.v[i].repeat(s, 1)
-
-        print(fl)
-        x = sum(fl)
+            x = self.f(self.loc[client](x2))
 
         if self.classes == 1:
             x = torch.sigmoid(x)
