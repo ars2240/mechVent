@@ -458,6 +458,12 @@ def adv_loader(batch_size=1, num_workers=0, pin_memory=True, head='advLogReg', c
     elif compress:
         raise Exception('Compression not implemented')
 
+    scaler = StandardScaler()
+    scaler.fit(X)
+    X = scaler.transform(X)
+    X_valid = scaler.transform(X_valid)
+    X_test = scaler.transform(X_test)
+
     headx = head + '_best' if best else head
     if compress:
         X_adv = np.genfromtxt('./data/' + headx + '.csv', delimiter=',')

@@ -203,6 +203,44 @@ class FLRSH(nn.Module):
         return x
 
 
+class FLRHZ(nn.Module):
+    def __init__(self, feats, nf=10, nc=4, classes=5, seed=1226):
+        torch.manual_seed(seed)
+        super(FLRHZ, self).__init__()
+
+        self.nc = nc
+        self.classes = classes
+        self.train_feat = [len(f) for f in feats]
+        self.loc = [None] * nc
+        for i in range(nc):
+            self.loc[i] = nn.Linear(self.train_feat[i], nf)
+        self.f = nn.Linear(nf, classes)
+        self.v = torch.zeros(nc, classes).requires_grad_()  # fill-in
+        self.S = torch.zeros(nc)  # set of clients
+
+    def forward(self, x):
+
+        if len(x) != self.nc:
+            raise Exception('Invalid number of inputs.')
+
+        fl = [None] * self.nc
+        for i in range(self.nc):
+            x2 = x[i]
+            s = x2.shape[0]
+            x2 = x2.reshape(s, -1)
+            fl[i] = self.f(self.loc[i](x2)) if self.S[i] else self.v[i].repeat(s, 1)
+
+        print(fl)
+        x = sum(fl)
+
+        if self.classes == 1:
+            x = torch.sigmoid(x)
+            x = torch.squeeze(x, dim=1)
+        else:
+            x = F.softmax(x, dim=1)
+        return x
+
+
 class FLNSH(nn.Module):
     def __init__(self, feats, nc=4, hidden=[5, 5], classes=5, seed=1226):
         torch.manual_seed(seed)
