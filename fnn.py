@@ -170,14 +170,15 @@ class FLRSH(nn.Module):
         self.nc = nc
         self.classes = classes
         self.train_feat = [len(f) for f in feats]
-        self.c, self.cl, self.loc = [None] * nc, [None] * nc, [None] * nc
+        self.c, self.cl, loc = [None] * nc, [None] * nc, [None] * nc
         self.shared = [f for f in feats[0] if f in feats[1]]
         self.shl = len(self.shared)
         self.sh = nn.Linear(self.shl, classes)
         for i in range(nc):
             self.c[i] = [f for f in feats[i] if f not in self.shared]
             self.cl[i] = len(self.c[i])
-            self.loc[i] = nn.Linear(self.cl[i], classes)
+            loc[i] = nn.Linear(self.cl[i], classes)
+        self.loc = nn.ModuleList(loc)
         self.v = torch.zeros(nc, classes).requires_grad_()  # fill-in
         self.S = torch.zeros(nc)  # set of clients
 
@@ -211,11 +212,8 @@ class FLRHZ(nn.Module):
         self.nc = nc
         self.classes = classes
         self.train_feat = [len(f) for f in feats]
-        self.loc = [None] * nc
-        for i in range(nc):
-            self.loc[i] = nn.Linear(self.train_feat[i], nf)
+        self.loc = nn.ModuleList([nn.Linear(self.train_feat[i], nf) for i in range(nc)])
         self.f = nn.Linear(nf, classes)
-        self.v = torch.zeros(nc, classes).requires_grad_()  # fill-in
         self.S = torch.zeros(nc)  # set of clients
 
     def forward(self, x, client=None):
@@ -224,14 +222,17 @@ class FLRHZ(nn.Module):
             raise Exception('Invalid number of inputs.')
 
         if client is None:
-            fl = [None] * self.nc
-            for i in range(self.nc):
-                x2 = x[i]
+
+            fl = [None] * sum(self.S)
+            idx = [i for i in range(self.nc) if self.S[i]]
+            ni = len(idx)
+            for i in range(ni):
+                x2 = x[idx[i]]
                 s = x2.shape[0]
                 x2 = x2.reshape(s, -1)
-                fl[i] = self.f(self.loc[i](x2)) if self.S[i] else self.v[i].repeat(s, 1)
+                fl[i] = self.f(self.loc[idx[i]](x2))
 
-            x = sum(fl)
+            x = sum(fl)/ni
         else:
             x2 = x[client]
             s = x2.shape[0]
@@ -253,14 +254,15 @@ class FLNSH(nn.Module):
         self.nc = nc
         self.classes = classes
         self.train_feat = [len(f) for f in feats]
-        self.c, self.cl, self.loc0, self.loc1 = [None] * nc, [None] * nc, [None] * nc, [None] * nc
+        self.c, self.cl, loc0, loc1 = [None] * nc, [None] * nc, [None] * nc, [None] * nc
         self.shared = [f for f in feats[0] if f in feats[1]]
         self.shl = len(self.shared)
         self.sh0, self.sh1 = (nn.Linear(self.shl, hidden[1]), nn.Linear(hidden[1], classes))
         for i in range(nc):
             self.c[i] = [f for f in feats[i] if f not in self.shared]
             self.cl[i] = len(self.c[i])
-            self.loc0[i], self.loc1[i] = nn.Linear(self.cl[i], hidden[0]), nn.Linear(hidden[0], classes)
+            loc0[i], loc1[i] = nn.Linear(self.cl[i], hidden[0]), nn.Linear(hidden[0], classes)
+        self.loc0, self.loc1 = nn.ModuleList(self.loc0), nn.ModuleList(self.loc1)
         self.v = torch.zeros(nc, classes).requires_grad_()  # fill-in
         self.S = torch.zeros(nc)  # set of clients
 

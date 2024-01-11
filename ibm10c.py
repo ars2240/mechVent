@@ -77,15 +77,25 @@ for sh in [1, 81, 171, 251, 341]:
     for i in range(len(c)):
         c[i].sort()
         c[i].extend(shared)
-    print(c)
 
+    nf = int(sh + (341 - sh) / 10)
     # tr_loader, val_loader, te_loader = ibm_loader(batch_size=128, c=c, adv=adv, adv_valid=True, undersample=4)
     tr_loader, val_loader, te_loader = adv_loader(batch_size=128, c=c, adv=adv, head='IBMU410c3a_Sh' + str(sh),
                                                   compress=True)
-    model = FLNSH(feats=c, nc=10, classes=2)
-    opt = torch.optim.Adam(model.parameters(), weight_decay=.01)
-    loss = nn.CrossEntropyLoss()
+    # for m in ['FLRHZ']:
+    for m in ['FLRSH', 'FLNSH']:
+        head2 = head + '_' + m
+        if m == 'FLRSH':
+            model = FLRSH(feats=c, nc=10, classes=2)
+        elif m == 'FLNSH':
+            model = FLNSH(feats=c, nc=10, classes=2)
+        elif m == 'FLRHZ':
+            model = FLRHZ(feats=c, nf=nf, nc=10, classes=2)
+        else:
+            raise Exception('Model not found.')
+        opt = torch.optim.Adam(model.parameters(), weight_decay=.01)
+        loss = nn.CrossEntropyLoss()
 
-    cmab = fcmab(model, loss, opt, nc=10, n=100, c='mabLin', head=head + '_FLNSH10c3a_Decay.01_AdvHztl',
-                 adv_c=[0, 1, 2], verbose=True)
-    cmab.train(tr_loader, val_loader, te_loader)
+        cmab = fcmab(model, loss, opt, nc=10, n=100, c='mablin', head=head2 + '10c3a_Decay.01_AdvHztl_Reset',
+                     adv_c=[0, 1, 2], fix_reset=True)
+        cmab.train(tr_loader, val_loader, te_loader)

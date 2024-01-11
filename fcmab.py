@@ -1,3 +1,4 @@
+import copy
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -50,7 +51,7 @@ def numberToBase(n, b):
 class fcmab(object):
     def __init__(self, model, loss, opt, nc=2, n=10, epochs=10, c=.5, keep_best=True, seed=1226, head='',
                  conf_matrix=False, adversarial=None, adv_epoch=1, adv_opt='sgd', adv_beta=(0.9, 0.999), adv_eps=1e-8,
-                 adv_step=1, adv_c=[], plot=True, m=0, ab=0, ucb_c=1, xdim=1, verbose=False):
+                 adv_step=1, adv_c=[], plot=True, m=0, ab=0, ucb_c=1, xdim=1, verbose=1, fix_reset=False, sync=True):
 
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -84,6 +85,11 @@ class fcmab(object):
         self.ab = ab  # type of alpha/beta update
         self.verbose = verbose  # if extra print statements are used
         self.best_models = {}  # best models
+        self.seed = seed  # random seed
+        self.fix_reset = fix_reset  # true if set seed and weights at each iteration
+        self.sync = sync  # true if synchronous learning, false if asynchronous (synch after each training iteration).
+        if fix_reset:
+            self.save(head=self.head + '_init')
 
     def train(self, train_loader, val_loader, test_loader):
 
@@ -129,7 +135,7 @@ class fcmab(object):
             # pull clients
             self.theta = np.random.beta(self.alpha, self.beta)
             theta_list.append(self.theta)
-            if self.verbose:
+            if self.verbose >= 1:
                 print(self.theta)
             if type(self.c) == int or type(self.c) == float:
                 self.model.S = self.theta > self.c
@@ -148,7 +154,7 @@ class fcmab(object):
                     ucb_m = [(dot(th_hat[j], x[j])).item() for j in range(self.nc)]
                     ucb_s = [np.sqrt(s[j]).item() for j in range(self.nc)]
                     ucb = [ucb_m[j] + self.ucb_c * ucb_s[j] for j in range(self.nc)]
-                    if self.verbose:
+                    if self.verbose >= 2:
                         print('A: {0}'.format(A))
                         print('b: {0}'.format(b))
                         print('x: {0}'.format(x))
@@ -169,7 +175,7 @@ class fcmab(object):
                     ucb_m = [(dot(self.theta, b_hat) + dot(th_hat[j], xz[j])).item() for j in range(self.nc)]
                     ucb_s = [np.sqrt(s[j]).item() for j in range(self.nc)]
                     ucb = [ucb_m[j] + self.ucb_c * ucb_s[j] for j in range(self.nc)]
-                    if self.verbose:
+                    if self.verbose >= 2:
                         print('A: {0}'.format(A))
                         print('B: {0}'.format(B))
                         print('b: {0}'.format(b))
@@ -208,8 +214,7 @@ class fcmab(object):
             # non-empty S
             if not any(self.model.S):
                 self.model.S = self.theta == np.max(self.theta)
-            if self.verbose:
-                print(self.model.S)
+            print(self.model.S)
             s_list.append(self.model.S)
 
             # adjust weights
@@ -242,7 +247,7 @@ class fcmab(object):
             # compute MAP
             map = self.alpha/(self.alpha + self.beta)
             map_list.append(map)
-            if self.verbose:
+            if self.verbose >= 1:
                 print(map)
 
             if self.c.lower() == 'mablin':
@@ -280,26 +285,61 @@ class fcmab(object):
             self.plots(tr_acc_list, val_acc_list, map_list, theta_list, s_list, ucb_list, ucb_mean, ucb_std)
 
     def train_iter(self, train_loader, val_loader, i):
-        if self.verbose:
+        if self.fix_reset:
+            torch.manual_seed(self.seed)
+            self.load(head=self.head + '_init', load_S=False)
+
+        if self.verbose >= 1:
             print('Iter\tEpoch\tLoss')
 
         self.model.train()
+        if not self.sync:
+            print(self.model.state_dict())
+            c = [x for x, b in enumerate(self.model.S) if b]  # get selected clients
+
+            # split model
+            model = [None] * len(c)
+            for j in range(len(c)):
+                model[j] = copy.deepcopy(self.model)
+                S = [False] * self.nc
+                S[c[j]] = True
+                model[j].S = S
         for epoch in range(self.epochs):
             for j, data in enumerate(train_loader):
 
-                if j == 0 and epoch == 0 and self.verbose:
+                if j == 0 and epoch == 0 and self.verbose >= 2:
                     X, y = data[:-1], data[-1]
                     for l in range(self.nc):
                         print('x{0}: {1}'.format(l, X[l]))
                     print('y: {0}'.format(y))
 
-                _, l, _ = self.model_loss(data)
+                if self.sync:
+                    _, l, _ = self.model_loss(data)
 
-                self.opt.zero_grad()
-                l.backward()
-                self.opt.step()
+                    self.opt.zero_grad()
+                    l.backward()
+                    self.opt.step()
+                else:
+                    for k in range(len(c)):
+                        _, l, _ = self.model_loss(data, model=model[k])
 
-        if self.verbose:
+                        self.opt.zero_grad()
+                        l.backward()
+                        self.opt.step()
+
+        if not self.sync:
+            # re-combine modes
+            for k in self.model.state_dict():
+                if 'loc' in k:
+                    j = int(k.split('.')[1])
+                    self.model[k] = model[j][k]
+                else:
+                    print(self.model[k].size())
+                    self.model[k] = torch.mean([model[j][k] for j in range(len(c))])
+                    print(self.model[k].size())
+                raise Exception('Stop.')
+
+        if self.verbose >= 1:
             tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
             print("%d\t%d\t%f" % (i, epoch, tr_loss))
 
@@ -307,13 +347,13 @@ class fcmab(object):
             for ep in range(self.adv_epoch):
                 train_loader = self.adversary(train_loader, ep)
                 val_loader = self.adversary(val_loader, ep)
-                if self.verbose:
+                if self.verbose >= 1:
                     tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
-                    print("%s\t%d\t%f" % ('A{0}'.format(ep), epoch, tr_loss))
+                    print("A%s\t%d\t%f" % (ep, epoch, tr_loss))
         elif self.adversarial is not None:
             train_loader = self.adversary(train_loader, epoch)
             val_loader = self.adversary(val_loader, epoch)
-            if self.verbose:
+            if self.verbose >= 1:
                 tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
                 print("%s\t%d\t%f" % ('Adv', epoch, tr_loss))
 
@@ -360,9 +400,8 @@ class fcmab(object):
         print(self.best_models)
 
         cc = ', '.join([str(x) for x, b in enumerate(self.model.S) if b])
-        if self.verbose:
-            print(self.model.S)
-            print('All Clients Chosen' if all(self.model.S) else 'Clients Chosen: {0}'.format(cc))
+        print(self.model.S)
+        print('All Clients Chosen' if all(self.model.S) else 'Clients Chosen: {0}'.format(cc))
         print('Train\tAcc\tTest\tAcc')
         train_loss, train_acc = self.loss_acc(train_loader, head=self.head + '_tr')
         test_loss, test_acc = self.loss_acc(test_loader, head=self.head + '_test')
@@ -483,7 +522,10 @@ class fcmab(object):
             plt.clf()
             plt.close()
 
-    def model_loss(self, data, adversarial=False):
+    def model_loss(self, data, model=None, adversarial=False):
+        if model is None:
+            model = self.model
+
         X, y = data[:-1], data[-1]
 
         if adversarial and self.adversarial is None:
@@ -493,8 +535,8 @@ class fcmab(object):
                                                      (type(self.adversarial) == list and i in self.adversarial)):
                 X[i].requires_grad_()
 
-        out = self.model(X)
-        if self.model.classes == 1:
+        out = model(X)
+        if model.classes == 1:
             l = self.loss(torch.squeeze(out).float(), y.float())
         else:
             l = self.loss(out, y)
@@ -583,15 +625,21 @@ class fcmab(object):
 
     def save(self, head=None):
         head = self.head if head is None else head
-        torch.save({'model_state_dict': self.model.state_dict(), 'S': self.model.S, 'v': self.model.v},
-                   './models/' + head + '.pt')
+        d = {'model_state_dict': self.model.state_dict(), 'S': self.model.S, 'optimizer': self.opt.state_dict()}
+        if hasattr(self.model, 'v'):
+            d['v'] = self.model.v
+        torch.save(d, './models/' + head + '.pt')
 
-    def load(self, head=None, info=False):
+    def load(self, head=None, info=False, load_S=True):
         head = self.head if head is None else head
         model = torch.load('./models/' + head + '.pt')
         if info:
             for key, value in model['model_state_dict'].items():
                 np.savetxt('./models/' + head + '_' + key + '.csv', value.detach().numpy(), delimiter=",")
         self.model.load_state_dict(model['model_state_dict'])
-        self.model.S = model['S']
-        self.model.v = model['v']
+        if load_S:
+            self.model.S = model['S']
+        if 'v' in model.keys():
+            self.model.v = model['v']
+        if 'optimizer' in model.keys():
+            self.opt.load_state_dict(model['optimizer'])
