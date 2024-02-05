@@ -212,8 +212,16 @@ class FLRHZ(nn.Module):
         self.nc = nc
         self.classes = classes
         self.train_feat = [len(f) for f in feats]
-        self.loc = nn.ModuleList([nn.Linear(self.train_feat[i], nf) for i in range(nc)])
-        self.f = nn.Linear(nf, classes)
+        self.c, self.cl, loc = [None] * nc, [None] * nc, [None] * nc
+        self.shared = [f for f in feats[0] if f in feats[1]]
+        self.shl = len(self.shared)
+        self.embed_sh = nn.ModuleList([nn.Linear(self.shl, nf[0]) for _ in range(nc)])
+        for i in range(nc):
+            self.c[i] = [f for f in feats[i] if f not in self.shared]
+            self.cl[i] = len(self.c[i])
+            loc[i] = nn.Linear(self.cl[i], nf[1])
+        self.embed_loc = nn.ModuleList(loc)
+        self.f = nn.ModuleList([nn.Linear(sum(nf), classes) for _ in range(nc)])
         self.S = torch.zeros(nc)  # set of clients
 
     def forward(self, x, client=None):
@@ -227,17 +235,18 @@ class FLRHZ(nn.Module):
             idx = [i for i in range(self.nc) if self.S[i]]
             ni = len(idx)
             for i in range(ni):
-                x2 = x[idx[i]]
-                s = x2.shape[0]
+                c = idx[i]
+                x2 = x[c]
+                s, f = x2.shape[0], self.cl[c]
                 x2 = x2.reshape(s, -1)
-                fl[i] = self.f(self.loc[idx[i]](x2))
+                fl[i] = self.f[c](torch.cat((self.embed_loc[c](x2[:, :f]), self.embed_sh[c](x2[:, f:])), dim=1))
 
             x = sum(fl)/ni
         else:
             x2 = x[client]
-            s = x2.shape[0]
+            s, f = x2.shape[0], self.cl[client]
             x2 = x2.reshape(s, -1)
-            x = self.f(self.loc[client](x2))
+            x = self.f[client](torch.cat((self.embed_loc[client](x2[:, :f]), self.embed_sh[client](x2[:, f:])), dim=1))
 
         if self.classes == 1:
             x = torch.sigmoid(x)
@@ -262,7 +271,7 @@ class FLNSH(nn.Module):
             self.c[i] = [f for f in feats[i] if f not in self.shared]
             self.cl[i] = len(self.c[i])
             loc0[i], loc1[i] = nn.Linear(self.cl[i], hidden[0]), nn.Linear(hidden[0], classes)
-        self.loc0, self.loc1 = nn.ModuleList(self.loc0), nn.ModuleList(self.loc1)
+        self.loc0, self.loc1 = nn.ModuleList(loc0), nn.ModuleList(loc1)
         self.v = torch.zeros(nc, classes).requires_grad_()  # fill-in
         self.S = torch.zeros(nc)  # set of clients
 

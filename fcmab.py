@@ -51,7 +51,8 @@ def numberToBase(n, b):
 class fcmab(object):
     def __init__(self, model, loss, opt, nc=2, n=10, epochs=10, c=.5, keep_best=True, seed=1226, head='',
                  conf_matrix=False, adversarial=None, adv_epoch=1, adv_opt='sgd', adv_beta=(0.9, 0.999), adv_eps=1e-8,
-                 adv_step=1, adv_c=[], plot=True, m=0, ab=0, ucb_c=1, xdim=1, verbose=1, fix_reset=False, sync=True):
+                 adv_step=1, adv_c=[], plot=True, m=0, ab=0, ucb_c=1, xdim=1, verbose=1, fix_reset=False, sync=True,
+                 sync_freq=1, embed_mu=1):
 
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -87,7 +88,9 @@ class fcmab(object):
         self.best_models = {}  # best models
         self.seed = seed  # random seed
         self.fix_reset = fix_reset  # true if set seed and weights at each iteration
-        self.sync = sync  # true if synchronous learning, false if asynchronous (synch after each training iteration).
+        self.sync = sync  # true if synchronous learning, false if asynchronous (sync after each training iteration).
+        self.sync_freq = sync_freq  # frequency of synchronization of models
+        self.embed_mu = embed_mu  # weight of embed loss
         if fix_reset:
             self.save(head=self.head + '_init')
 
@@ -294,17 +297,9 @@ class fcmab(object):
 
         self.model.train()
         if not self.sync:
-            print(self.model.state_dict())
             c = [x for x, b in enumerate(self.model.S) if b]  # get selected clients
-
-            # split model
-            model = [None] * len(c)
-            for j in range(len(c)):
-                model[j] = copy.deepcopy(self.model)
-                S = [False] * self.nc
-                S[c[j]] = True
-                model[j].S = S
         for epoch in range(self.epochs):
+
             for j, data in enumerate(train_loader):
 
                 if j == 0 and epoch == 0 and self.verbose >= 2:
@@ -320,24 +315,31 @@ class fcmab(object):
                     l.backward()
                     self.opt.step()
                 else:
-                    for k in range(len(c)):
-                        _, l, _ = self.model_loss(data, model=model[k])
+                    for k in c:
+                        _, l, _ = self.model_loss(data, client=k)
 
                         self.opt.zero_grad()
                         l.backward()
                         self.opt.step()
 
-        if not self.sync:
-            # re-combine modes
-            for k in self.model.state_dict():
-                if 'loc' in k:
-                    j = int(k.split('.')[1])
-                    self.model[k] = model[j][k]
-                else:
-                    print(self.model[k].size())
-                    self.model[k] = torch.mean([model[j][k] for j in range(len(c))])
-                    print(self.model[k].size())
-                raise Exception('Stop.')
+            if not self.sync and epoch % self.sync_freq == 0:
+                # re-combine modes
+                sd = self.model.state_dict()
+                keys = sd.keys()
+                keyVar = np.unique([k.split('.')[0] + k.split('.')[-1] for k in keys])
+
+                c = [x for x, b in enumerate(self.model.S) if b]  # get selected clients
+                for k in keyVar:
+                    if 'embed' not in k:
+                        keys2 = [k2 for k2 in keys if k2.split('.')[0] + k2.split('.')[-1] == k]
+                        m = 0
+                        for j in range(len(c)):
+                            k2 = keys2[c[j]]
+                            m = sd[k2] * 1 / (j + 1) + m * j / (j + 1)
+                        for j in range(self.nc):
+                            k2 = keys2[j]
+                            sd[k2] = m
+                self.model.load_state_dict(sd)
 
         if self.verbose >= 1:
             tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
@@ -522,9 +524,7 @@ class fcmab(object):
             plt.clf()
             plt.close()
 
-    def model_loss(self, data, model=None, adversarial=False):
-        if model is None:
-            model = self.model
+    def model_loss(self, data, client=None, adversarial=False):
 
         X, y = data[:-1], data[-1]
 
@@ -535,11 +535,32 @@ class fcmab(object):
                                                      (type(self.adversarial) == list and i in self.adversarial)):
                 X[i].requires_grad_()
 
-        out = model(X)
-        if model.classes == 1:
+        if client is None:
+            out = self.model(X)
+        else:
+            out = self.model(X, client)
+        if self.model.classes == 1:
             l = self.loss(torch.squeeze(out).float(), y.float())
         else:
             l = self.loss(out, y)
+
+        # add regularization for embeddings
+        if hasattr(self.model, 'embed_sh'):
+            c = [x for x, b in enumerate(self.model.S) if b]  # get selected clients
+
+            wm, bm, wv, bv = 0, 0, 0, 0
+            for j in range(len(c)):
+                ew, eb = self.model.embed_sh[c[j]].weight, self.model.embed_sh[c[j]].bias
+                if c[j] == client:
+                    wv, bv = ew, eb
+                if self.verbose >= 2:
+                    print('Client {0} Embed Weight: {1}'.format(c[j], ew.item()))
+                wm, bm = ew * 1/(j + 1) + wm * j/(j + 1), eb * 1/(j + 1) + bm * j/(j + 1)
+            el = torch.norm(wv-wm) + torch.norm(bv-bm)
+            if self.verbose >= 2:
+                print('Embed Weight Mean: {0}'.format(wm.item()))
+                print('Embed Loss: {0}'.format(el))
+            l += self.embed_mu * el
 
         return out, l, y
 
