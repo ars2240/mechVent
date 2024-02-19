@@ -96,6 +96,6 @@ for sh in [1, 81, 171, 251, 341]:
         opt = torch.optim.Adam(model.parameters(), weight_decay=.01)
         loss = nn.CrossEntropyLoss()
 
-        cmab = fcmab(model, loss, opt, nc=10, n=100, c='mablin', head=head2 + '10c3a_Decay.01_AdvHztl_Asynch1',
-                     adv_c=[0, 1, 2], sync=False)
+        cmab = fcmab(model, loss, opt, nc=10, n=100, c='mad', head=head2 + '10c3a_Decay.01_AdvHztl_Asynch1_MAD2',
+                     adv_c=[0, 1, 2], sync=False, ucb_c=2)
         cmab.train(tr_loader, val_loader, te_loader)

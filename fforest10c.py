@@ -20,20 +20,20 @@ for sh in range(2, 13, 10):
     # tr_loader, val_loader, te_loader = forest_loader(batch_size=128, c=c, adv=adv, adv_valid=True)
     tr_loader, val_loader, te_loader = adv_loader(batch_size=128, c=c, adv=adv, head='Forest10c3a_Sh' + str(sh),
                                                   compress=True)
-    # for m in ['FLRHZ']:
-    for m in ['FLRSH', 'FLNSH']:
+    for m in ['FLRHZ']:
+    # for m in ['FLRSH', 'FLNSH']:
         head2 = 'forest_Sh{0}_{1}'.format(sh, m)
         if m == 'FLRSH':
             model = FLRSH(feats=c, nc=10, classes=7)
         elif m == 'FLNSH':
             model = FLNSH(feats=c, nc=10, classes=7)
         elif m == 'FLRHZ':
-            model = FLRHZ(feats=c, nf=[sh, nf-sh], nc=10, classes=2)
+            model = FLRHZ(feats=c, nf=[sh, nf-sh], nc=10, classes=7)
         else:
             raise Exception('Model not found.')
         opt = torch.optim.Adam(model.parameters())
         loss = nn.CrossEntropyLoss()
 
-        cmab = fcmab(model, loss, opt, nc=10, n=100, c='mablin', head=head2 + '10c3a_AdvHztl',
-                     adv_c=[0, 1, 2])
+        cmab = fcmab(model, loss, opt, nc=10, n=100, c='mad', head=head2 + '10c3a_AdvHztl_Asynch1_MAD2',
+                     adv_c=[0, 1, 2], sync=False, ucb_c=2)
         cmab.train(tr_loader, val_loader, te_loader)

@@ -205,7 +205,7 @@ class FLRSH(nn.Module):
 
 
 class FLRHZ(nn.Module):
-    def __init__(self, feats, nf=10, nc=4, classes=5, seed=1226):
+    def __init__(self, feats, nf=[10, 10], nc=4, classes=5, seed=1226):
         torch.manual_seed(seed)
         super(FLRHZ, self).__init__()
 

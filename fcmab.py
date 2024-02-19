@@ -68,6 +68,7 @@ class fcmab(object):
         self.theta = np.zeros(nc)  # random variable
         self.ucb_n = np.zeros(nc)  # count for UCB
         self.ucb_c = ucb_c  # confidence in UCB
+        self.diff = np.zeros(nc)  # difference of models from mean
         self.xdim = xdim  # dimensions of ucb x
         self.c = c  # cutoff
         self.keep_best = keep_best  # whether best model is kept
@@ -110,7 +111,7 @@ class fcmab(object):
 
         best_acc, best_iter, all_s, good_s = 0, 'N/A', None, None
         map = 0.5
-        tr_acc_list, val_acc_list, map_list, s_list, theta_list = [], [], [], [], []
+        tr_acc_list, val_acc_list, map_list, theta_list = [], [], [], []
         ucb_list, ucb_mean, ucb_std = [], [], []
         if self.c.lower() == 'mablin':
             xz = np.random.normal(size=(self.nc, self.xdim))
@@ -127,7 +128,10 @@ class fcmab(object):
             good = [c for c in range(self.nc) if c not in self.adv_c]
             self.n = 2 ** len(good) - 1
             print('Setting number of iterations to {0}'.format(self.n))
+        elif self.c.lower() in ['distance', 'mad']:
+            self.model.S = np.array([True] * self.nc)
         good_v = [c not in self.adv_c for c in range(self.nc)]
+        s_list = np.zeros((self.n, self.nc))
         for i in range(self.n):
 
             # open log
@@ -140,7 +144,7 @@ class fcmab(object):
             theta_list.append(self.theta)
             if self.verbose >= 1:
                 print(self.theta)
-            if type(self.c) == int or type(self.c) == float:
+            if type(self.c) is int or type(self.c) is float:
                 self.model.S = self.theta > self.c
                 c = self.c
             elif self.c.lower() == 'mean':
@@ -211,6 +215,19 @@ class fcmab(object):
                 bi = numberToBase(i+1, 2)
                 print(bi)
                 self.model.S[good[-len(bi):]] = [x == 1 for x in bi]
+            elif self.c.lower() in ['distance', 'mad']:
+                c = [x for x, b in enumerate(self.model.S) if b]
+                m = self.diff[c]
+                sd = np.median(m) if 'mad' else np.sum(np.power(m, 2))/len(c)
+                if sd > 0:
+                    zs = m/sd
+                    if self.verbose >= 2:
+                        print(zs)
+                    cuts = zs < self.ucb_c
+                    z2 = [np.NAN] * self.nc
+                    for j in range(len(c)):
+                        self.model.S[c[j]], z2[c[j]] = cuts[j], zs[j]
+                    ucb_list.append(z2)
             else:
                 raise Exception('Cutoff not implemented.')
 
@@ -218,7 +235,7 @@ class fcmab(object):
             if not any(self.model.S):
                 self.model.S = self.theta == np.max(self.theta)
             print(self.model.S)
-            s_list.append(self.model.S)
+            s_list[i, :] = self.model.S
 
             # adjust weights
             train_loader, val_loader = self.train_iter(train_loader, val_loader, i)
@@ -329,6 +346,7 @@ class fcmab(object):
                 keyVar = np.unique([k.split('.')[0] + k.split('.')[-1] for k in keys])
 
                 c = [x for x, b in enumerate(self.model.S) if b]  # get selected clients
+                self.diff = np.zeros(self.nc)
                 for k in keyVar:
                     if 'embed' not in k:
                         keys2 = [k2 for k2 in keys if k2.split('.')[0] + k2.split('.')[-1] == k]
@@ -336,9 +354,13 @@ class fcmab(object):
                         for j in range(len(c)):
                             k2 = keys2[c[j]]
                             m = sd[k2] * 1 / (j + 1) + m * j / (j + 1)
+                        m2 = torch.from_numpy(np.median([sd[keys2[c[j]]].detach().numpy() for j in range(len(c))],
+                                                        axis=0)) if self.c.lower() == 'mad' else m
                         for j in range(self.nc):
                             k2 = keys2[j]
+                            self.diff[j] += np.linalg.norm(sd[k2] - m2) ** 2 if j in c else 0
                             sd[k2] = m
+                self.diff = np.sqrt(self.diff)
                 self.model.load_state_dict(sd)
 
         if self.verbose >= 1:
@@ -466,6 +488,7 @@ class fcmab(object):
 
         # number of clients
         s_list = np.transpose(np.array(s_list).astype('int'))
+        np.savetxt("./logs/" + self.head + "_clients.csv", np.transpose(s_list), delimiter=",")
         plt.plot(np.sum(s_list, axis=0))
         plt.title('Number of Clients')
         plt.xlabel("Iterations")
@@ -488,6 +511,19 @@ class fcmab(object):
         plt.savefig('./plots/' + self.head + '_clients.png')
         plt.clf()
         plt.close()
+
+        if 'distance' in self.c.lower():
+            # UCB plots
+            ucb_list = np.array(ucb_list)
+            for i in range(ucb_list.shape[1]):
+                plt.plot(ucb_list[:, i], label=str(i + 1))
+            plt.title("Distance")
+            plt.xlabel("Iterations")
+            plt.ylabel("Distance")
+            plt.legend()
+            plt.savefig('./plots/' + self.head + '_dist.png')
+            plt.clf()
+            plt.close()
 
         if 'mab' in self.c.lower():
             # UCB plots
@@ -548,15 +584,18 @@ class fcmab(object):
         if hasattr(self.model, 'embed_sh'):
             c = [x for x, b in enumerate(self.model.S) if b]  # get selected clients
 
-            wm, bm, wv, bv = 0, 0, 0, 0
+            wm, bm, el, rc = 0, 0, 0, range(len(c))
             for j in range(len(c)):
                 ew, eb = self.model.embed_sh[c[j]].weight, self.model.embed_sh[c[j]].bias
                 if c[j] == client:
-                    wv, bv = ew, eb
+                    rc = [j]
                 if self.verbose >= 2:
                     print('Client {0} Embed Weight: {1}'.format(c[j], ew.item()))
                 wm, bm = ew * 1/(j + 1) + wm * j/(j + 1), eb * 1/(j + 1) + bm * j/(j + 1)
-            el = torch.norm(wv-wm) + torch.norm(bv-bm)
+            for j in rc:
+                ew, eb = self.model.embed_sh[c[j]].weight, self.model.embed_sh[c[j]].bias
+                el += torch.norm(ew - wm)
+                el += torch.norm(eb - bm)
             if self.verbose >= 2:
                 print('Embed Weight Mean: {0}'.format(wm.item()))
                 print('Embed Loss: {0}'.format(el))
