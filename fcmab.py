@@ -310,7 +310,9 @@ class fcmab(object):
             self.load(head=self.head + '_init', load_S=False)
 
         if self.verbose >= 1:
-            print('Iter\tEpoch\tLoss')
+            head = 'Iter\tEpoch\tLoss'
+            head += '\tFLoss\tEmbed\tRatio' if hasattr(self.model, 'embed_sh') else ''
+            print(head)
 
         self.model.train()
         if not self.sync:
@@ -364,8 +366,13 @@ class fcmab(object):
                 self.model.load_state_dict(sd)
 
         if self.verbose >= 1:
-            tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
-            print("%d\t%d\t%f" % (i, epoch, tr_loss))
+            if hasattr(self.model, 'embed_sh'):
+                tr_loss, _, ll_loss, el_loss = self.loss_acc(train_loader, head=self.head + '_tr', split=True)
+            else:
+                tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
+            p = "%d\t%d\t%f" % (i, epoch, tr_loss)
+            p += '\t%f\t%f\t%f' % (ll_loss, el_loss, el_loss/ll_loss) if hasattr(self.model, 'embed_sh') else ''
+            print(p)
 
         if self.adversarial is not None and self.adv_epoch > 1:
             for ep in range(self.adv_epoch):
@@ -560,7 +567,7 @@ class fcmab(object):
             plt.clf()
             plt.close()
 
-    def model_loss(self, data, client=None, adversarial=False):
+    def model_loss(self, data, client=None, adversarial=False, split=False):
 
         X, y = data[:-1], data[-1]
 
@@ -581,6 +588,7 @@ class fcmab(object):
             l = self.loss(out, y)
 
         # add regularization for embeddings
+        ll = l
         if hasattr(self.model, 'embed_sh'):
             c = [x for x, b in enumerate(self.model.S) if b]  # get selected clients
 
@@ -601,15 +609,22 @@ class fcmab(object):
                 print('Embed Loss: {0}'.format(el))
             l += self.embed_mu * el
 
-        return out, l, y
+        if split:
+            return out, l, y, (ll, el)
+        else:
+            return out, l, y
 
-    def loss_acc(self, loader, head=None):
+    def loss_acc(self, loader, head=None, split=False):
         head = self.head if head is None else head
         loss_list, acc_list, size = [], [], []
         labels, outputs = [], []
+        ll_list, el_list = [], []
         for _, data in enumerate(loader):
 
-            out, l, y = self.model_loss(data)
+            if split:
+                out, l, y, (ll, el) = self.model_loss(data, split=True)
+            else:
+                out, l, y = self.model_loss(data)
 
             if self.model.classes == 1:
                 predicted = (out.data > 0.5).float()
@@ -620,6 +635,9 @@ class fcmab(object):
 
             loss_list.append(l.item())
             acc_list.append(acc)
+            if split:
+                ll_list.append(ll.item())
+                el_list.append(el.item())
             size.append(out.shape[0])
             if self.conf_matrix:
                 labels.extend(y)
@@ -631,7 +649,11 @@ class fcmab(object):
             lp = np.concatenate((np.expand_dims(labels, axis=1), np.expand_dims(outputs, axis=1)), axis=1)
             np.savetxt("./logs/" + head + "_labels_pred.csv", lp, delimiter=",")
 
-        return np.average(loss_list, weights=size), np.average(acc_list, weights=size)
+        if split:
+            return np.average(loss_list, weights=size), np.average(acc_list, weights=size),\
+                np.average(ll_list, weights=size), np.average(el_list, weights=size)
+        else:
+            return np.average(loss_list, weights=size), np.average(acc_list, weights=size)
 
     def adversary(self, loader, epoch=None):
         if self.adversarial is not None and ((type(self.adversarial) == int and self.model.S[self.adversarial]) or (
