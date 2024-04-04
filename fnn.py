@@ -205,7 +205,7 @@ class FLRSH(nn.Module):
 
 
 class FLRHZ(nn.Module):
-    def __init__(self, feats, nf=[10, 10], nc=4, classes=5, seed=1226):
+    def __init__(self, feats, nf=[10, 10], m=1, nc=4, classes=5, seed=1226):
         torch.manual_seed(seed)
         super(FLRHZ, self).__init__()
 
@@ -215,10 +215,10 @@ class FLRHZ(nn.Module):
         self.c, self.cl, loc = [None] * nc, [None] * nc, [None] * nc
         self.shared = [f for f in feats[0] if f in feats[1]]
         self.shl = len(self.shared)
-        self.embed_sh = nn.ModuleList([nn.Linear(self.shl, nf[0]) for _ in range(nc)])
+        self.embed_sh = nn.ModuleList([nn.Linear(self.shl * m, nf[0]) for _ in range(nc)])
         for i in range(nc):
             self.c[i] = [f for f in feats[i] if f not in self.shared]
-            self.cl[i] = len(self.c[i])
+            self.cl[i] = len(self.c[i]) * m
             loc[i] = nn.Linear(self.cl[i], nf[1])
         self.embed_loc = nn.ModuleList(loc)
         self.f = nn.ModuleList([nn.Linear(sum(nf), classes) for _ in range(nc)])
@@ -226,8 +226,10 @@ class FLRHZ(nn.Module):
 
     def forward(self, x, client=None):
 
+        if len(x) == 1:
+            x = x[0]
         if len(x) != self.nc:
-            raise Exception('Invalid number of inputs.')
+            raise Exception('Invalid number of inputs: {0} != {1}.'.format(len(x), self.nc))
 
         if client is None:
 

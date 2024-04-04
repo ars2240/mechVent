@@ -19,22 +19,23 @@ for sh in range(4, 25, 10):
         c[i].extend(shared)
 
     nf = int(sh + (24 - sh) / 10)
+    imgsz = 3 * (137 ** 2)
     tr_loader, val_loader, te_loader = shape_loader(batch_size=128, c=c, adv=adv, adv_valid=True)
 
     for m in ['FLRHZ']:
     # for m in ['FLRSH', 'FLNSH']:
-        head2 = 'forest_Sh{0}_{1}'.format(sh, m)
+        head2 = 'shape_Sh{0}_{1}'.format(sh, m)
         if m == 'FLRSH':
-            model = FLRSH(feats=c, nc=10, classes=7)
+            model = FLRSH(feats=c, nc=10, classes=13)
         elif m == 'FLNSH':
-            model = FLNSH(feats=c, nc=10, classes=7)
+            model = FLNSH(feats=c, nc=10, classes=13)
         elif m == 'FLRHZ':
-            model = FLRHZ(feats=c, nf=[sh, nf-sh], nc=10, classes=7)
+            model = FLRHZ(feats=c, nf=[sh, nf-sh], m=imgsz, nc=10, classes=13)
         else:
             raise Exception('Model not found.')
         opt = torch.optim.Adam(model.parameters())
         loss = nn.CrossEntropyLoss()
 
-        cmab = fcmab(model, loss, opt, nc=10, n=100, c='mad', head=head2 + '10c3a_None_Asynch1_MAD2',
+        cmab = fcmab(model, loss, opt, nc=10, n=100, c='mad', head=head2 + '10c3a_RandPert_Asynch1_MAD2',
                      adv_c=[0, 1, 2], sync=False, ucb_c=2, embed_mu=1)
         cmab.train(tr_loader, val_loader, te_loader)

@@ -669,7 +669,7 @@ def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.
 
 class shape_dataset(Dataset):
     def __init__(self, state=1226, test_size=0.2, valid_size=0.2, use='train', counts=False,
-                 dir='./data/ShapeNetRendering', transform=None, c=[], adv=[]):
+                 dir='./data/ShapeNetRendering', transform=None, std=1, c=[], adv=[]):
 
         cdirs, X, y = [dir + '/' + name for name in os.listdir(dir) if os.path.isdir(os.path.join(dir, name))], [], []
         for i in range(len(cdirs)):
@@ -678,11 +678,10 @@ class shape_dataset(Dataset):
             X.extend(nd)
             y.extend([i] * len(nd))
 
+        X, y = np.array(X), np.array(y)
         self.X, self.y = X, y
-        X, X_test, y, y_test = train_test_split(np.array(X), np.array(y), test_size=test_size,
-                                                random_state=state)
-        X, X_valid, y, y_valid = train_test_split(np.array(X), np.array(y), test_size=valid_size,
-                                                  random_state=state)
+        X, X_test, y, y_test = train_test_split(X, y, test_size=test_size, random_state=state)
+        X, X_valid, y, y_valid = train_test_split(X, y, test_size=valid_size, random_state=state)
 
         if counts:
             print('Train counts: {0}'.format(sort_dict({item: list(y).count(item) / len(y) for item in y})))
@@ -702,7 +701,11 @@ class shape_dataset(Dataset):
         else:
             raise Exception('use must be "train" or "validation" or "test" or "all"')
 
+        if transform is None:
+            transform = transforms.Compose([transforms.ToTensor(), normalize])
         self.transform = transform
+
+        self.std, self.c, self.adv = std, c, adv
 
     def __len__(self):
         return len(self.y)
@@ -714,30 +717,35 @@ class shape_dataset(Dataset):
         images = []
         for f in fnames:
             image = PIL.Image.open(f).convert('RGB')
-            if self.transform:
-                image = self.transform(image)
+            image = self.transform(image)
             images.append(image)
 
-        y[idx] = torch.from_numpy(self.y[idx]).long()
+        x = [torch.stack([images[j] for j in self.c[i]]) for i in range(len(self.c))]
+        if isinstance(self.adv, list) and len(self.adv) > 0:
+            x[0][self.adv] += torch.normal(mean=0, std=self.std, size=x[0][self.adv[a]].shape)
+        elif isinstance(self.adv, dict):
+            for a in self.adv.keys():
+                x[a][self.adv[a]] += torch.normal(mean=0, std=self.std, size=x[a][self.adv[a]].shape)
 
-        return X, y
+        y = self.y[idx]
+
+        return x, y
 
 
 def shape_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
-                 c=[], adv=[], adv_valid=True, counts=False, dir='./data/ShapeNetRendering'):
+                 std=1, c=[], adv=[], adv_valid=True, counts=False, dir='./data/ShapeNetRendering'):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
     set = shape_dataset(state=state, test_size=test_size, valid_size=valid_size, use='train', counts=counts, dir=dir,
-                        transform=None, c=c, adv=adv)
+                        transform=None, std=std, c=c, adv=adv)
     train_loader = DataLoader(set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory, num_workers=num_workers)
-    for j, data in enumerate(train_loader):
-        print(data)
+    adv_v = adv if adv_valid else []
     set = shape_dataset(state=state, test_size=test_size, valid_size=valid_size, use='validation', dir=dir,
-                        transform=None, c=c, adv=adv)
+                        transform=None, std=std, c=c, adv=adv_v)
     valid_loader = DataLoader(set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory, num_workers=num_workers)
     set = shape_dataset(state=state, test_size=test_size, valid_size=valid_size, use='test', dir=dir,
-                        transform=None, c=c, adv=adv)
+                        transform=None, std=std, c=c, adv=adv)
     test_loader = DataLoader(set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory, num_workers=num_workers)
 
     return train_loader, valid_loader, test_loader
