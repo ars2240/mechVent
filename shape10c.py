@@ -30,7 +30,7 @@ for sh in range(4, 25, 10):
         elif m == 'FLNSH':
             model = FLNSH(feats=c, nc=10, classes=13)
         elif m == 'FLRHZ':
-            model = FLRHZ(feats=c, nf=[sh, nf-sh], m=imgsz, nc=10, classes=13)
+            model = FCNNHZ(feats=c, nc=10, classes=13)
         else:
             raise Exception('Model not found.')
         opt = torch.optim.Adam(model.parameters())

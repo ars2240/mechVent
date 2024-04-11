@@ -345,19 +345,21 @@ class fcmab(object):
                 # re-combine modes
                 sd = self.model.state_dict()
                 keys = sd.keys()
-                keyVar = np.unique([k.split('.')[0] + k.split('.')[-1] for k in keys])
+                keyVar = np.unique([k.split('.')[0] + ''.join(k.split('.')[2:]) for k in keys])
 
                 c = [x for x, b in enumerate(self.model.S) if b]  # get selected clients
                 self.diff = np.zeros(self.nc)
                 for k in keyVar:
                     if 'embed' not in k:
-                        keys2 = [k2 for k2 in keys if k2.split('.')[0] + k2.split('.')[-1] == k]
+                        keys2 = [k2 for k2 in keys if k2.split('.')[0] + ''.join(k2.split('.')[2:]) == k]
                         m = 0
                         for j in range(len(c)):
                             k2 = keys2[c[j]]
+                            # print('{0} shape on client {1}: {2}'.format(k2, j, sd[k2].shape))
                             m = sd[k2] * 1 / (j + 1) + m * j / (j + 1)
-                        m2 = torch.from_numpy(np.median([sd[keys2[c[j]]].detach().numpy() for j in range(len(c))],
-                                                        axis=0)) if self.c.lower() == 'mad' else m
+                        m2 = np.median([sd[keys2[c[j]]].detach().numpy() for j in range(len(c))], axis=0) if \
+                            self.c.lower() == 'mad' else m
+                        m2 = torch.from_numpy(m2) if isinstance(m2, np.ndarray) else m2
                         for j in range(self.nc):
                             k2 = keys2[j]
                             self.diff[j] += np.linalg.norm(sd[k2] - m2) ** 2 if j in c else 0
