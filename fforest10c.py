@@ -17,10 +17,11 @@ for sh in range(2, 13, 10):
         c[i].extend(shared)
 
     nf = int(sh + (12 - sh) / 10)
-    # tr_loader, val_loader, te_loader = forest_loader(batch_size=128, c=c, adv=adv, adv_valid=True)
-    tr_loader, val_loader, te_loader = adv_loader(batch_size=128, c=c, adv=adv, head='Forest10c3a_Sh' + str(sh),
-                                                  compress=True)
-    for m in ['FLRHZ']:
+    tr_loader, val_loader, te_loader = forest_loader(batch_size=128, c=c, adv=adv, adv_valid=True)
+    # tr_loader, val_loader, te_loader = adv_loader(batch_size=128, c=c, adv=adv, head='Forest10c3a_Sh' + str(sh),
+    #                                               compress=True)
+    # for m in ['FLRHZ']:
+    for m in ['FLRSH']:
     # for m in ['FLRSH', 'FLNSH']:
         head2 = 'forest_Sh{0}_{1}'.format(sh, m)
         if m == 'FLRSH':
@@ -34,6 +35,6 @@ for sh in range(2, 13, 10):
         opt = torch.optim.Adam(model.parameters())
         loss = nn.CrossEntropyLoss()
 
-        cmab = fcmab(model, loss, opt, nc=10, n=100, c='mad', head=head2 + '10c3a_AdvHztl_Asynch1_MAD2_mu1e-6',
-                     adv_c=[0, 1, 2], sync=False, ucb_c=2, embed_mu=1e-6)
+        cmab = fcmab(model, loss, opt, nc=10, n=100, c='mablin', head=head2 + '10c3a_RandPert_Reset',
+                     adv_c=[0, 1, 2], fix_reset=True)
         cmab.train(tr_loader, val_loader, te_loader)

@@ -79,10 +79,11 @@ for sh in [1, 81, 171, 251, 341]:
         c[i].extend(shared)
 
     nf = int(sh + (341 - sh) / 10)
-    # tr_loader, val_loader, te_loader = ibm_loader(batch_size=128, c=c, adv=adv, adv_valid=True, undersample=4)
-    tr_loader, val_loader, te_loader = adv_loader(batch_size=128, c=c, adv=adv, head='IBMU410c3a_Sh' + str(sh),
-                                                  compress=True)
-    for m in ['FLRHZ']:
+    tr_loader, val_loader, te_loader = ibm_loader(batch_size=128, c=c, adv=adv, adv_valid=True, undersample=4)
+    # tr_loader, val_loader, te_loader = adv_loader(batch_size=128, c=c, adv=adv, head='IBMU410c3a_Sh' + str(sh),
+    #                                               compress=True)
+    # for m in ['FLRHZ']:
+    for m in ['FLRSH']:
     # for m in ['FLRSH', 'FLNSH']:
         head2 = head + '_' + m
         if m == 'FLRSH':
@@ -96,6 +97,6 @@ for sh in [1, 81, 171, 251, 341]:
         opt = torch.optim.Adam(model.parameters(), weight_decay=.01)
         loss = nn.CrossEntropyLoss()
 
-        cmab = fcmab(model, loss, opt, nc=10, n=100, c='mad', head=head2 + '10c3a_Decay.01_AdvHztl_Asynch1_MAD2_mu1e-6',
-                     adv_c=[0, 1, 2], sync=False, ucb_c=2, embed_mu=1e-6)
+        cmab = fcmab(model, loss, opt, nc=10, n=100, c='mablin', head=head2 + '10c3a_Decay.01_RandPert_Reset',
+                     adv_c=[0, 1, 2], fix_reset=True)
         cmab.train(tr_loader, val_loader, te_loader)

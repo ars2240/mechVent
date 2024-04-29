@@ -2,8 +2,10 @@ import math
 import numpy as np
 
 data = 'forest'
-# tail = '_Asynch1_MAD2'
-tail = ''
+# tail = '_allgood_RandPert_Reset'
+tail = '_RandPert_Asynch1_MAD2'
+# models = ['FLRSH']
+models = ['FLRHZ']
 
 
 def get_time(file):
@@ -27,14 +29,13 @@ elif data.lower() == 'ibm':
 else:
     raise Exception('Data source not implemented.')
 for sh in shl:
-    # for m in ['FLRHZ']:
-    for m in ['FLRSH', 'FLNSH']:
+    for m in models:
         if data.lower() == 'forest':
-            file1 = 'forest_Sh{0}_{1}10c3a_AdvHztl{2}'.format(sh, m, tail)
+            file1 = 'forest_Sh{0}_{1}10c3a{2}'.format(sh, m, tail)
         elif data.lower() == 'ni':
-            file1 = 'NI+Share' + str(sh) + '_' + m + '10c3a_AdvHztl' + tail
+            file1 = 'NI+Share{0}_{1}10c3a{2}'.format(sh, m, tail)
         elif data.lower() == 'ibm':
-            file1 = 'IBMU4_Sh' + str(sh) + '_' + m + '10c3a_Decay.01_AdvHztl' + tail
+            file1 = 'IBMU4_Sh{0}_{1}10c3a_Decay.01{2}'.format(sh, m, tail)
         else:
             raise Exception('Data source not implemented.')
 

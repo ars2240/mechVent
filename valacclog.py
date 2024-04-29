@@ -1,9 +1,9 @@
-import holoviews as hv
+# import holoviews as hv
 from itertools import combinations
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
+# import plotly.graph_objects as go
 
 accplot = False
 ncplot = False
@@ -11,16 +11,28 @@ sankey = False
 chord = False
 binlab = False
 first = None
-print_iter = True
+print_iter = False
 m = 'FLRSH'
-tail = '_Reset'
+tail = '_RandPert_Reset'
+data = 'forest'
 
-# for sh in [1, 81, 171, 251, 341]:
-# for sh in range(1, 42, 10):
-for sh in range(2, 3, 10):
-    # file = 'IBMU4_Sh' + str(sh) + '_FLRSH10c3a_Decay.01_RandPert'
-    # file = 'NI+Share' + str(sh) + '_FLRSH10c3a_RandPert'
-    file = 'forest_Sh{0}_{1}10c3a_AdvHztl{2}'.format(sh, m, tail)
+if data.lower() == 'forest':
+    shl = range(2, 13, 10)
+elif data.lower() == 'ni':
+    shl = range(1, 42, 10)
+elif data.lower() == 'ibm':
+    shl = [1, 81, 171, 251, 341]
+else:
+    raise Exception('Data source not implemented.')
+for sh in shl:
+    if data.lower() == 'forest':
+        file = 'forest_Sh{0}_{1}10c3a{2}'.format(sh, m, tail)
+    elif data.lower() == 'ni':
+        file = 'NI+Share{0}_{1}10c3a{2}'.format(sh, m, tail)
+    elif data.lower() == 'ibm':
+        file = 'IBMU4_Sh{0}_{1}10c3a_Decay.01{2}'.format(sh, m, tail)
+    else:
+        raise Exception('Data source not implemented.')
 
     with open('./logs/' + file + '.log', 'r') as log:
         lines = log.readlines()
@@ -114,6 +126,7 @@ for sh in range(2, 3, 10):
         plt.clf()
         plt.close()
 
+    """
     if sankey:
         label, indices = np.unique(c_list, return_inverse=True)
         source, target = indices[:-1], indices[1:]
@@ -148,3 +161,4 @@ for sh in range(2, 3, 10):
         p.opts(hv.opts.Chord(cmap='Category20', edge_cmap='Category20', edge_color=hv.dim('source').str(),
                              labels='source', node_color=hv.dim('index').str()))
         hv.save(p, './plots/' + file + '_chord.png', fmt='png')
+    """
