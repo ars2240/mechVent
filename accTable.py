@@ -2,10 +2,11 @@ import math
 import numpy as np
 
 data = 'forest'
-# tail = '_allgood_RandPert_Reset'
-tail = '_RandPert_Asynch1_MAD2'
-# models = ['FLRSH']
-models = ['FLRHZ']
+tail = '_allgood_RandPert_Reset'
+# tail = '_RandPert_Asynch1_MAD2'
+config = '5c2a'
+models = ['FLRSH']
+# models = ['FLRHZ']
 
 
 def get_accs(file):
@@ -16,7 +17,7 @@ def get_accs(file):
 
 
 if data.lower() == 'forest':
-    shl = range(2, 13, 10)
+    shl = range(2, 13, 10) if config.startswith('10') else range(2, 13, 5)
 elif data.lower() == 'ni':
     shl = range(1, 42, 10)
 elif data.lower() == 'ibm':
@@ -26,11 +27,11 @@ else:
 for sh in shl:
     for m in models:
         if data.lower() == 'forest':
-            file1 = 'forest_Sh{0}_{1}10c3a{2}'.format(sh, m, tail)
+            file1 = 'forest_Sh{0}_{1}{2}{3}'.format(sh, m, config, tail)
         elif data.lower() == 'ni':
-            file1 = 'NI+Share{0}_{1}10c3a{2}'.format(sh, m, tail)
+            file1 = 'NI+Share{0}_{1}{2}{3}'.format(sh, m, config, tail)
         elif data.lower() == 'ibm':
-            file1 = 'IBMU4_Sh{0}_{1}10c3a_Decay.01{2}'.format(sh, m, tail)
+            file1 = 'IBMU4_Sh{0}_{1}{2}_Decay.01{3}'.format(sh, m, config, tail)
         else:
             raise Exception('Data source not implemented.')
 
