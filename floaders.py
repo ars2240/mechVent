@@ -669,7 +669,7 @@ def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.
 
 class shape_dataset(Dataset):
     def __init__(self, state=1226, test_size=0.2, valid_size=0.2, use='train', counts=False,
-                 dir='./data/ShapeNetRendering', transform=None, std=1, c=[], adv=[]):
+                 dir='./data/ShapeNetRendering', transform=None, std=1, angles=None, cut=22.5, c=[], adv=[]):
 
         cdirs, X, y = [dir + '/' + name for name in os.listdir(dir) if os.path.isdir(os.path.join(dir, name))], [], []
         for i in range(len(cdirs)):
@@ -679,6 +679,21 @@ class shape_dataset(Dataset):
             y.extend([i] * len(nd))
 
         X, y = np.array(X), np.array(y)
+
+        if angles is not None:
+            diffs = np.zeros((len(set), len(angles)))
+            for i in range(len(X)):
+                dir = X[i]
+                meta = np.genfromtxt(dir + '/rendering_metadata.txt', delimiter=' ')
+                diff = np.abs(np.subtract(np.transpose(angles), np.expand_dims(meta[:, 0], axis=1)))
+                diff2 = np.abs(np.subtract(np.transpose(angles) - 360, np.expand_dims(meta[:, 0], axis=1)))
+                dmin = diff.min(axis=0)
+                dmin2 = diff2.min(axis=0)
+                diffs[i, :] = np.minimum(dmin, dmin2)
+            diffcuts = diffs < cut
+            diffcut = np.prod(diffcuts, axis=1)
+            X, y = X[diffcut], y[diffcut]
+
         self.X, self.y = X, y
         X, X_test, y, y_test = train_test_split(X, y, test_size=test_size, random_state=state)
         X, X_valid, y, y_valid = train_test_split(X, y, test_size=valid_size, random_state=state)
@@ -705,7 +720,7 @@ class shape_dataset(Dataset):
             transform = transforms.Compose([transforms.ToTensor(), normalize])
         self.transform = transform
 
-        self.std, self.c, self.adv = std, c, adv
+        self.std, self.angles, self.cut, self.c, self.adv = std, angles, cut, c, adv
 
     def __len__(self):
         return len(self.y)
@@ -720,7 +735,12 @@ class shape_dataset(Dataset):
             image = self.transform(image)
             images.append(image)
 
-        x = [torch.stack([images[j] for j in self.c[i]]) for i in range(len(self.c))]
+        if self.angles is not None:
+            meta = np.genfromtxt(dir + '/rendering_metadata.txt', delimiter=' ')
+            x = [torch.stack([images[j] for j in np.where(np.abs(meta[:, 0]-self.angles[i])<self.cut)]) \
+                 for i in range(len(self.c))]
+        else:
+            x = [torch.stack([images[j] for j in self.c[i]]) for i in range(len(self.c))]
         if isinstance(self.adv, list) and len(self.adv) > 0:
             x[0][self.adv] += torch.normal(mean=0, std=self.std, size=x[0][self.adv[a]].shape)
         elif isinstance(self.adv, dict):
@@ -733,19 +753,21 @@ class shape_dataset(Dataset):
 
 
 def shape_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
-                 std=1, c=[], adv=[], adv_valid=True, counts=False, dir='./data/ShapeNetRendering'):
+                 std=1, cut=22.5, c=[], adv=[], adv_valid=True, counts=False, dir='./data/ShapeNetRendering',
+                 angles=[48.54946536, 90.02852279, 129.56504831, 164.66412299, 210.77101218, 257.82223983, 310.82768749,
+                         345.781062]):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
     set = shape_dataset(state=state, test_size=test_size, valid_size=valid_size, use='train', counts=counts, dir=dir,
-                        transform=None, std=std, c=c, adv=adv)
+                        transform=None, std=std, angles=angles, cut=cut, c=c, adv=adv)
     train_loader = DataLoader(set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory, num_workers=num_workers)
     adv_v = adv if adv_valid else []
     set = shape_dataset(state=state, test_size=test_size, valid_size=valid_size, use='validation', dir=dir,
-                        transform=None, std=std, c=c, adv=adv_v)
+                        transform=None, std=std, angles=angles, cut=cut, c=c, adv=adv_v)
     valid_loader = DataLoader(set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory, num_workers=num_workers)
     set = shape_dataset(state=state, test_size=test_size, valid_size=valid_size, use='test', dir=dir,
-                        transform=None, std=std, c=c, adv=adv)
+                        transform=None, std=std, angles=angles, cut=cut, c=c, adv=adv)
     test_loader = DataLoader(set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory, num_workers=num_workers)
 
     return train_loader, valid_loader, test_loader
