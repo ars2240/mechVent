@@ -737,9 +737,9 @@ def make_list(x):
 
 
 class main(object):
-    def __init__(self, data, c=10, advf=3, shared=None, strategy=None, model=None):
+    def __init__(self, data, advs=None, c=10, advf=3, shared=None, strategy=None, model=None):
         self.data = make_list(data)  # forest, ni, or ibm
-        self.adv = make_list(adv)  # RandPert or AdvHztl
+        self.advs = make_list(advs)  # RandPert or AdvHztl
         self.c = make_list(c)  # number of clients
         self.advf = make_list(advf)  # number of adversarial features
         self.shared = make_list(shared)  # number of shared features
@@ -791,7 +791,7 @@ class main(object):
     def get_c(self, d, cl, sh, advf):
         if sh == self.f0:
             c = [[] * cl]
-        if d == 'ibm' and cl == 20 and sh == 1:
+        elif d == 'ibm' and cl == 20 and sh == 1:
             c = [[271, 287, 305, 330, 65, 264, 41, 197, 116, 4, 85, 261, 17, 141, 56, 227, 44],
                  [217, 233, 269, 270, 67, 219, 304, 218, 139, 294, 297, 31, 74, 59, 57, 320, 167],
                  [192, 201, 202, 212, *range(335, 340), 13, 25, 35, 134, 135, 136, 137, 138, 2, 71, 189, 7],
@@ -1050,14 +1050,14 @@ class main(object):
             c[i].extend(shared)
         return c, adv
 
-    def get_loaders(self, d, c, adv, sh):
-        if d == 'forest' and adv == 'RandPert':
+    def get_loaders(self, d, advs, c, adv, sh):
+        if d == 'forest' and advs == 'RandPert':
             tr_loader, val_loader, te_loader = forest_loader(batch_size=128, c=c, adv=adv, adv_valid=True)
-        elif d == 'ni' and adv == 'RandPert':
+        elif d == 'ni' and advs == 'RandPert':
             tr_loader, val_loader, te_loader = ni_loader(batch_size=128, c=c, adv=adv, adv_valid=True)
-        elif d == 'ibm' and adv == 'RandPert':
+        elif d == 'ibm' and advs == 'RandPert':
             tr_loader, val_loader, te_loader = ibm_loader(batch_size=128, c=c, adv=adv, adv_valid=True, undersample=4)
-        elif adv == 'AdvHztl':
+        elif advs == 'AdvHztl':
             head = 'IMBU4' if d == 'ibm' else 'NI+' if d == 'ni' else 'Forest' if d == 'forest' else ''
             head += '{0}c{1}a_Sh{2}'.format(len(c), len(adv), sh)
             tr_loader, val_loader, te_loader = adv_loader(batch_size=128, c=c, adv=adv, head=head, compress=True)
@@ -1069,9 +1069,9 @@ class main(object):
         return ['allgood', 'mab', 'mad']
 
     def get_models(self, strat):
-        return 'FLRHZ' if strat in ['mad'] else 'FLRSH'
+        return ['FLRHZ'] if strat in ['mad'] else ['FLRSH']
 
-    def get_model(self, m, cl, sh):
+    def get_model(self, m, c, cl, sh):
         nf = int(sh + (self.f1 - sh) / cl)
         if m == 'FLRSH':
             model = FLRSH(feats=c, nc=cl, classes=self.classes)
@@ -1097,39 +1097,44 @@ class main(object):
             raise Exception('Number of clients not implemented. Please specify number of adversarial features.')
         return advf
 
+    def get_advs(self):
+        return ['RandPert']
+
     def run(self):
         for d in self.data:
             d = d.lower()
             self.get_f(d)
             for cl in self.c:
-                advf = self.get_advf(d, cl) if self.advf[0] is None else self.advf
-                for advf in advf:
-                    for advs in self.adv:
+                advfs = self.get_advf(d, cl) if self.advf[0] is None else self.advf
+                for advf in advfs:
+                    advss = self.get_advs() if self.advs[0] is None else self.advs
+                    for advs in advss:
                         strategy = self.get_strategies() if self.strategy[0] is None else self.strategy
                         for strat in strategy:
                             shared = self.get_shared(d, cl) if self.shared[0] is None else self.shared
                             for sh in shared:
                                 head = self.get_head(d, sh)
                                 c, adv = self.get_c(d, cl, sh, advf)
-                                tr_loader, val_loader, te_loader = self.get_loaders(d, c, advs, sh)
-                                models = self.get_models() if self.model[0] is None else self.model
+                                tr_loader, val_loader, te_loader = self.get_loaders(d, advs, c, adv, sh)
+                                models = self.get_models(strat) if self.model[0] is None else self.model
                                 for m in models:
                                     head2 = head + '_' + m
-                                    model = self.get_model(m, cl, sh)
+                                    model = self.get_model(m, c, cl, sh)
                                     opt = self.get_opt(model, d)
                                     loss = nn.CrossEntropyLoss()
                                     if strat == 'allgood':
-                                        tail = '{0}c{1}a_allgood_{2}_Reset'.format(cl, adv, d)
+                                        tail = '{0}c{1}a_allgood_{2}_Reset'.format(cl, advs, d)
                                         cmab = fcmab(model, loss, opt, nc=cl, n=100, c='allgood', head=head2 + tail,
                                                      adv_c=[*range(advf)], fix_reset=True)
                                     elif strat == 'mab':
-                                        tail = '{0}c{1}a_{2}_Reset'.format(cl, adv, d)
+                                        tail = '{0}c{1}a_{2}_Reset'.format(cl, advs, d)
                                         cmab = fcmab(model, loss, opt, nc=cl, n=100, c='mablin', head=head2 + tail,
                                                      adv_c=[*range(advf)], fix_reset=True)
                                     elif strat == 'mad':
-                                        tail = '{0}c{1}a_{2}_Asynch1_MAD2'.format(cl, adv, d)
+                                        tail = '{0}c{1}a_{2}_Asynch1_MAD2'.format(cl, advs, d)
                                         cmab = fcmab(model, loss, opt, nc=cl, n=100, c='mad', head=head2 + tail,
                                                      adv_c=[*range(advf)], sync=False, ucb_c=2)
                                     else:
                                         raise Exception('Config not implemented.')
+                                    print(head2+tail)
                                     cmab.train(tr_loader, val_loader, te_loader)
