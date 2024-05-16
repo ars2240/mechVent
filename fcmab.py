@@ -790,7 +790,8 @@ class main(object):
 
     def get_c(self, d, cl, sh, advf):
         if sh == self.f0:
-            c = [[] * cl]
+            c = [[] for _ in range(cl)]
+            print(c)
         elif d == 'ibm' and cl == 20 and sh == 1:
             c = [[271, 287, 305, 330, 65, 264, 41, 197, 116, 4, 85, 261, 17, 141, 56, 227, 44],
                  [217, 233, 269, 270, 67, 219, 304, 218, 139, 294, 297, 31, 74, 59, 57, 320, 167],
@@ -1043,7 +1044,7 @@ class main(object):
             c = [[6], [9], [4], [8], [1]]
         else:
             raise Exception('Number of shared features not implemented.')
-        shared = [x for x in range(0, self.f1) if x not in chain(*c)]
+        shared = [x for x in range(self.f1) if x not in chain(*c)]
         adv = {i: [*range(len(c[i]), len(c[i]) + len(shared))] for i in range(advf)}
         for i in range(len(c)):
             c[i].sort()
@@ -1123,15 +1124,15 @@ class main(object):
                                     opt = self.get_opt(model, d)
                                     loss = nn.CrossEntropyLoss()
                                     if strat == 'allgood':
-                                        tail = '{0}c{1}a_allgood_{2}_Reset'.format(cl, advs, d)
+                                        tail = '{0}c{1}a_allgood_{2}_Reset'.format(cl, advf, advs)
                                         cmab = fcmab(model, loss, opt, nc=cl, n=100, c='allgood', head=head2 + tail,
                                                      adv_c=[*range(advf)], fix_reset=True)
                                     elif strat == 'mab':
-                                        tail = '{0}c{1}a_{2}_Reset'.format(cl, advs, d)
+                                        tail = '{0}c{1}a_{2}_Reset'.format(cl, advf, advs)
                                         cmab = fcmab(model, loss, opt, nc=cl, n=100, c='mablin', head=head2 + tail,
                                                      adv_c=[*range(advf)], fix_reset=True)
                                     elif strat == 'mad':
-                                        tail = '{0}c{1}a_{2}_Asynch1_MAD2'.format(cl, advs, d)
+                                        tail = '{0}c{1}a_{2}_Asynch1_MAD2'.format(cl, advf, advs)
                                         cmab = fcmab(model, loss, opt, nc=cl, n=100, c='mad', head=head2 + tail,
                                                      adv_c=[*range(advf)], sync=False, ucb_c=2)
                                     else:
