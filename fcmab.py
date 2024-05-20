@@ -737,7 +737,7 @@ def make_list(x):
 
 
 class main(object):
-    def __init__(self, data, advs=None, c=10, advf=3, shared=None, strategy=None, model=None):
+    def __init__(self, data, advs=None, c=10, advf=None, shared=None, strategy=None, model=None):
         self.data = make_list(data)  # forest, ni, or ibm
         self.advs = make_list(advs)  # RandPert or AdvHztl
         self.c = make_list(c)  # number of clients
@@ -791,7 +791,6 @@ class main(object):
     def get_c(self, d, cl, sh, advf):
         if sh == self.f0:
             c = [[] for _ in range(cl)]
-            print(c)
         elif d == 'ibm' and cl == 20 and sh == 1:
             c = [[271, 287, 305, 330, 65, 264, 41, 197, 116, 4, 85, 261, 17, 141, 56, 227, 44],
                  [217, 233, 269, 270, 67, 219, 304, 218, 139, 294, 297, 31, 74, 59, 57, 320, 167],
@@ -1106,7 +1105,7 @@ class main(object):
             d = d.lower()
             self.get_f(d)
             for cl in self.c:
-                advfs = self.get_advf(d, cl) if self.advf[0] is None else self.advf
+                advfs = self.get_advf(cl) if self.advf[0] is None else self.advf
                 for advf in advfs:
                     advss = self.get_advs() if self.advs[0] is None else self.advs
                     for advs in advss:
