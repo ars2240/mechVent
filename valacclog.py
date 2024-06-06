@@ -30,7 +30,8 @@ for sh in shl:
     elif data.lower() == 'ni':
         file = 'NI+Share{0}_{1}10c3a{2}'.format(sh, m, tail)
     elif data.lower() == 'ibm':
-        file = 'IBMU4_Sh{0}_{1}10c3a_Decay.01{2}'.format(sh, m, tail)
+        # file = 'IBMU4_Sh{0}_{1}10c3a_Decay.01{2}'.format(sh, m, tail)
+        file = 'IBMU4_Sh{0}_{1}10c3a{2}'.format(sh, m, tail)
     else:
         raise Exception('Data source not implemented.')
 

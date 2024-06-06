@@ -762,6 +762,8 @@ class main(object):
             sh = [1, 81, 181, 261, 341]
         elif d == 'ibm' and c in [5, 10]:
             sh = [1, 81, 171, 251, 341]
+        elif d == 'shape':
+            sh = []
         else:
             raise Exception('Please specify number of shared features.')
         return sh
@@ -773,6 +775,8 @@ class main(object):
             head = 'NI+Share'
         elif d == 'ibm':
             head = 'IBMU4_Sh'
+        elif d == 'shape':
+            head = 'Shape_Sh'
         else:
             raise Exception('Data set not implemented.')
         head += str(sh)
@@ -785,6 +789,8 @@ class main(object):
             self.f0, self.f1, self.classes = 41, 122, 2
         elif d == 'ibm':
             self.f0, self.f1, self.classes = 341, 363, 2
+        elif d == 'shape':
+            self.f0, self.f1, self.classes = None, None, 13
         else:
             raise Exception('Data set not implemented.')
 
@@ -1041,6 +1047,8 @@ class main(object):
             c = [[3, 6], [9, *range(10, 14)], [2, 4], [8, *range(14, 54)], [1, 5]]
         elif d == 'forest' and cl == 5 and sh == 7:
             c = [[6], [9], [4], [8], [1]]
+        elif d == 'shape' and cl == 8:
+            c = []
         else:
             raise Exception('Number of shared features not implemented.')
         shared = [x for x in range(self.f1) if x not in chain(*c)]
@@ -1057,6 +1065,8 @@ class main(object):
             tr_loader, val_loader, te_loader = ni_loader(batch_size=128, c=c, adv=adv, adv_valid=True)
         elif d == 'ibm' and advs == 'RandPert':
             tr_loader, val_loader, te_loader = ibm_loader(batch_size=128, c=c, adv=adv, adv_valid=True, undersample=4)
+        elif d == 'shape' and advs == 'RandPert':
+            tr_loader, val_loader, te_loader = shape_loader(batch_size=128, c=c, adv=adv, adv_valid=True)
         elif advs == 'AdvHztl':
             head = 'IMBU4' if d == 'ibm' else 'NI+' if d == 'ni' else 'Forest' if d == 'forest' else ''
             head += '{0}c{1}a_Sh{2}'.format(len(c), len(adv), sh)
@@ -1089,6 +1099,8 @@ class main(object):
     def get_advf(self, cl):
         if cl == 5:
             advf = [2, 3]
+        elif cl == 8:
+            advf = [2, 4, 6]
         elif cl == 10:
             advf = [3, 5, 7]
         elif cl == 20:
