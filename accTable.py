@@ -2,9 +2,41 @@ import math
 import numpy as np
 
 data = 'forest'
-configs = [{'data': 'forest', 'tail': '_RandPert_Reset', 'config': '20c15a', 'models': ['FLRSH']},
-           {'data': 'forest', 'tail': '_allgood_RandPert_Reset', 'config': '20c15a', 'models': ['FLRSH']},
-           {'data': 'forest', 'tail': '_RandPert_Asynch1_MAD2', 'config': '20c15a', 'models': ['FLRHZ']}]
+nc = 5
+if nc == 10 and data == 'ibm':
+    configs = [{'data': data, 'tail': '_Decay.01_RandPert_Reset', 'config': '10c3a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_Decay.01_allgood_RandPert_Reset', 'config': '10c3a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_Decay.01_RandPert_Asynch1_MAD2', 'config': '10c3a', 'models': ['FLRHZ']},
+               {'data': data, 'tail': '_RandPert_Reset', 'config': '10c5a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_allgood_RandPert_Reset', 'config': '10c5a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_RandPert_Asynch1_MAD2', 'config': '10c5a', 'models': ['FLRHZ']},
+               {'data': data, 'tail': '_RandPert_Reset', 'config': '10c7a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_allgood_RandPert_Reset', 'config': '10c7a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_RandPert_Asynch1_MAD2', 'config': '10c7a', 'models': ['FLRHZ']}]
+elif nc == 10:
+    configs = [{'data': data, 'tail': '_RandPert_Reset', 'config': '10c3a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_allgood_RandPert_Reset', 'config': '10c3a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_RandPert_Asynch1_MAD2', 'config': '10c3a', 'models': ['FLRHZ']},
+               {'data': data, 'tail': '_RandPert_Reset', 'config': '10c5a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_allgood_RandPert_Reset', 'config': '10c5a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_RandPert_Asynch1_MAD2', 'config': '10c5a', 'models': ['FLRHZ']},
+               {'data': data, 'tail': '_RandPert_Reset', 'config': '10c7a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_allgood_RandPert_Reset', 'config': '10c7a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_RandPert_Asynch1_MAD2', 'config': '10c7a', 'models': ['FLRHZ']}]
+elif nc == 5 and data == 'ibm':
+    configs = [{'data': data, 'tail': '_Decay.01_RandPert_Reset', 'config': '5c2a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_Decay.01_allgood_RandPert_Reset', 'config': '5c2a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_RandPert_Asynch1_MAD2', 'config': '5c2a', 'models': ['FLRHZ']},
+               {'data': data, 'tail': '_RandPert_Reset', 'config': '5c3a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_allgood_RandPert_Reset', 'config': '5c3a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_RandPert_Asynch1_MAD2', 'config': '5c3a', 'models': ['FLRHZ']}]
+elif nc == 5:
+    configs = [{'data': data, 'tail': '_RandPert_Reset', 'config': '5c2a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_allgood_RandPert_Reset', 'config': '5c2a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_RandPert_Asynch1_MAD2', 'config': '5c2a', 'models': ['FLRHZ']},
+               {'data': data, 'tail': '_RandPert_Reset', 'config': '5c3a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_allgood_RandPert_Reset', 'config': '5c3a', 'models': ['FLRSH']},
+               {'data': data, 'tail': '_RandPert_Asynch1_MAD2', 'config': '5c3a', 'models': ['FLRHZ']}]
 
 
 def get_accs(file):
@@ -39,3 +71,4 @@ for c in configs:
             line1 = get_accs(file1)
 
             print(line1)
+    print()
