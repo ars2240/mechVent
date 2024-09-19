@@ -142,6 +142,9 @@ class fcmab(object):
             log_file = open('./logs/' + self.head + '.log', 'a')  # open log file
             sys.stdout = log_file  # write to log file
 
+            if self.verbose >= 1:
+                print('Iteration {0}'.format(i))
+
             # pull clients
             self.theta = np.random.beta(self.alpha, self.beta)
             theta_list.append(self.theta)
@@ -164,7 +167,7 @@ class fcmab(object):
                     ucb_m = [(dot(th_hat[j], x[j])).item() for j in range(self.nc)]
                     ucb_s = [np.sqrt(s[j]).item() for j in range(self.nc)]
                     ucb = [ucb_m[j] + self.ucb_c * ucb_s[j] for j in range(self.nc)]
-                    if self.verbose >= 2:
+                    if self.verbose >= 3:
                         print('A: {0}'.format(A))
                         print('b: {0}'.format(b))
                         print('x: {0}'.format(x))
@@ -185,7 +188,7 @@ class fcmab(object):
                     ucb_m = [(dot(self.theta, b_hat) + dot(th_hat[j], xz[j])).item() for j in range(self.nc)]
                     ucb_s = [np.sqrt(s[j]).item() for j in range(self.nc)]
                     ucb = [ucb_m[j] + self.ucb_c * ucb_s[j] for j in range(self.nc)]
-                    if self.verbose >= 2:
+                    if self.verbose >= 3:
                         print('A: {0}'.format(A))
                         print('B: {0}'.format(B))
                         print('b: {0}'.format(b))
@@ -224,7 +227,7 @@ class fcmab(object):
                 sd = np.median(m) if 'mad' else np.sum(np.power(m, 2))/len(c)
                 if sd > 0:
                     zs = m/sd
-                    if self.verbose >= 2:
+                    if self.verbose >= 3:
                         print(zs)
                     cuts = zs < self.ucb_c
                     z2 = [np.NAN] * self.nc
@@ -322,13 +325,24 @@ class fcmab(object):
             c = [x for x, b in enumerate(self.model.S) if b]  # get selected clients
         for epoch in range(self.epochs):
 
+            start = time.time()
+
             for j, data in enumerate(train_loader):
+
+                if self.verbose >= 3:
+                    timeHMS(time.time() - start, head='Batch {0} of {1} '.format(j, len(train_loader)))
 
                 if j == 0 and epoch == 0 and self.verbose >= 2:
                     X, y = data[:-1], data[-1]
+                    if len(X) == 1:
+                        X = X[0]
+                    if self.verbose >= 3:
+                        for l in range(self.nc):
+                            print('x{0}: {1}'.format(l, X[l]))
+                        print('y: {0}'.format(y))
                     for l in range(self.nc):
-                        print('x{0}: {1}'.format(l, X[l]))
-                    print('y: {0}'.format(y))
+                        print('x{0} shape: {1}'.format(l, X[l].size()))
+                    print('y shape: {0}'.format(y.size()))
 
                 if self.sync:
                     _, l, _ = self.model_loss(data)
@@ -343,6 +357,10 @@ class fcmab(object):
                         self.opt.zero_grad()
                         l.backward()
                         self.opt.step()
+
+            start2 = time.time()
+            if self.verbose >= 2:
+                timeHMS(start2 - start, head='Train ')
 
             if not self.sync and epoch % self.sync_freq == 0:
                 # re-combine modes
@@ -370,14 +388,18 @@ class fcmab(object):
                 self.diff = np.sqrt(self.diff)
                 self.model.load_state_dict(sd)
 
-        if self.verbose >= 1:
-            if hasattr(self.model, 'embed_sh'):
-                tr_loss, _, ll_loss, el_loss = self.loss_acc(train_loader, head=self.head + '_tr', split=True)
-            else:
-                tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
-            p = "%d\t%d\t%f" % (i, epoch, tr_loss)
-            p += '\t%f\t%f\t%f' % (ll_loss, el_loss, el_loss/ll_loss) if hasattr(self.model, 'embed_sh') else ''
-            print(p)
+                start3 = time.time()
+                if self.verbose >= 2:
+                    timeHMS(start3 - start2, head='Sync ')
+
+            if self.verbose >= 1:
+                if hasattr(self.model, 'embed_sh'):
+                    tr_loss, _, ll_loss, el_loss = self.loss_acc(train_loader, head=self.head + '_tr', split=True)
+                else:
+                    tr_loss, _ = self.loss_acc(train_loader, head=self.head + '_tr')
+                p = "%d\t%d\t%f" % (i, epoch, tr_loss)
+                p += '\t%f\t%f\t%f' % (ll_loss, el_loss, el_loss/ll_loss) if hasattr(self.model, 'embed_sh') else ''
+                print(p)
 
         if self.adversarial is not None and self.adv_epoch > 1:
             for ep in range(self.adv_epoch):
@@ -602,14 +624,14 @@ class fcmab(object):
                 ew, eb = self.model.embed_sh[c[j]].weight, self.model.embed_sh[c[j]].bias
                 if c[j] == client:
                     rc = [j]
-                if self.verbose >= 2:
+                if self.verbose >= 3:
                     print('Client {0} Embed Weight: {1}'.format(c[j], ew.item()))
                 wm, bm = ew * 1/(j + 1) + wm * j/(j + 1), eb * 1/(j + 1) + bm * j/(j + 1)
             for j in rc:
                 ew, eb = self.model.embed_sh[c[j]].weight, self.model.embed_sh[c[j]].bias
                 el += torch.norm(ew - wm)
                 el += torch.norm(eb - bm)
-            if self.verbose >= 2:
+            if self.verbose >= 3:
                 print('Embed Weight Mean: {0}'.format(wm.item()))
                 print('Embed Loss: {0}'.format(el))
             l += self.embed_mu * el
@@ -624,7 +646,7 @@ class fcmab(object):
         loss_list, acc_list, size = [], [], []
         labels, outputs = [], []
         ll_list, el_list = [], []
-        for _, data in enumerate(loader):
+        for j, data in enumerate(loader):
 
             if split:
                 out, l, y, (ll, el) = self.model_loss(data, split=True)
@@ -737,7 +759,7 @@ def make_list(x):
 
 
 class main(object):
-    def __init__(self, data, advs=None, c=10, advf=None, shared=None, strategy=None, model=None):
+    def __init__(self, data, advs=None, c=10, advf=None, shared=None, strategy=None, model=None, verbose=1):
         self.data = make_list(data)  # forest, ni, or ibm
         self.advs = make_list(advs)  # RandPert or AdvHztl
         self.c = make_list(c)  # number of clients
@@ -745,6 +767,7 @@ class main(object):
         self.shared = make_list(shared)  # number of shared features
         self.strategy = make_list(strategy)  # strategies
         self.model = make_list(model)  # models
+        self.verbose = verbose  # how much to print
         self.f0, self.f1, self.classes = None, None, None
 
     def get_shared(self, d, c):
@@ -763,7 +786,7 @@ class main(object):
         elif d == 'ibm' and c in [5, 10]:
             sh = [1, 81, 171, 251, 341]
         elif d == 'shape':
-            sh = []
+            sh = [45]
         else:
             raise Exception('Please specify number of shared features.')
         return sh
@@ -1051,8 +1074,8 @@ class main(object):
             c = []
         else:
             raise Exception('Number of shared features not implemented.')
-        shared = [x for x in range(self.f1) if x not in chain(*c)]
-        adv = {i: [*range(len(c[i]), len(c[i]) + len(shared))] for i in range(advf)}
+        shared = [] if self.f1 is None else [x for x in range(self.f1) if x not in chain(*c)]
+        adv = {i: [] if self.f1 is None else [*range(len(c[i]), len(c[i]) + len(shared))] for i in range(advf)}
         for i in range(len(c)):
             c[i].sort()
             c[i].extend(shared)
@@ -1066,7 +1089,7 @@ class main(object):
         elif d == 'ibm' and advs == 'RandPert':
             tr_loader, val_loader, te_loader = ibm_loader(batch_size=128, c=c, adv=adv, adv_valid=True, undersample=4)
         elif d == 'shape' and advs == 'RandPert':
-            tr_loader, val_loader, te_loader = shape_loader(batch_size=128, c=c, adv=adv, adv_valid=True)
+            tr_loader, val_loader, te_loader = shape_loader(batch_size=16, c=c, adv=adv, adv_valid=True)
         elif advs == 'AdvHztl':
             head = 'IMBU4' if d == 'ibm' else 'NI+' if d == 'ni' else 'Forest' if d == 'forest' else ''
             head += '{0}c{1}a_Sh{2}'.format(len(c), len(adv), sh)
@@ -1078,17 +1101,22 @@ class main(object):
     def get_strategies(self):
         return ['allgood', 'mab', 'mad']
 
-    def get_models(self, strat):
-        return ['FLRHZ'] if strat in ['mad'] else ['FLRSH']
+    def get_models(self, d, strat):
+        if d in ['shape']:
+            return ['FCNNHZ'] if strat in ['mad'] else ['FLCNN']
+        else:
+            return ['FLRHZ'] if strat in ['mad'] else ['FLRSH']
 
     def get_model(self, m, c, cl, sh):
-        nf = int(sh + (self.f1 - sh) / cl)
         if m == 'FLRSH':
             model = FLRSH(feats=c, nc=cl, classes=self.classes)
         elif m == 'FLNSH':
             model = FLNSH(feats=c, nc=cl, classes=self.classes)
         elif m == 'FLRHZ':
+            nf = int(sh + (self.f1 - sh) / cl)
             model = FLRHZ(feats=c, nf=[sh, nf - sh], nc=cl, classes=self.classes)
+        elif m == 'FCNNHZ':
+            model = FCNNHZ(feats=c, nc=cl, classes=self.classes)
         else:
             raise Exception('Model not found.')
         return model
@@ -1128,7 +1156,7 @@ class main(object):
                                 head = self.get_head(d, sh)
                                 c, adv = self.get_c(d, cl, sh, advf)
                                 tr_loader, val_loader, te_loader = self.get_loaders(d, advs, c, adv, sh)
-                                models = self.get_models(strat) if self.model[0] is None else self.model
+                                models = self.get_models(d, strat) if self.model[0] is None else self.model
                                 for m in models:
                                     head2 = head + '_' + m
                                     model = self.get_model(m, c, cl, sh)
@@ -1137,15 +1165,15 @@ class main(object):
                                     if strat == 'allgood':
                                         tail = '{0}c{1}a_allgood_{2}_Reset'.format(cl, advf, advs)
                                         cmab = fcmab(model, loss, opt, nc=cl, n=100, c='allgood', head=head2 + tail,
-                                                     adv_c=[*range(advf)], fix_reset=True)
+                                                     adv_c=[*range(advf)], fix_reset=True, verbose=self.verbose)
                                     elif strat == 'mab':
                                         tail = '{0}c{1}a_{2}_Reset'.format(cl, advf, advs)
                                         cmab = fcmab(model, loss, opt, nc=cl, n=100, c='mablin', head=head2 + tail,
-                                                     adv_c=[*range(advf)], fix_reset=True)
+                                                     adv_c=[*range(advf)], fix_reset=True, verbose=self.verbose)
                                     elif strat == 'mad':
                                         tail = '{0}c{1}a_{2}_Asynch1_MAD2'.format(cl, advf, advs)
                                         cmab = fcmab(model, loss, opt, nc=cl, n=100, c='mad', head=head2 + tail,
-                                                     adv_c=[*range(advf)], sync=False, ucb_c=2)
+                                                     adv_c=[*range(advf)], sync=False, ucb_c=2, verbose=self.verbose)
                                     else:
                                         raise Exception('Config not implemented.')
                                     print(head2+tail)

@@ -269,9 +269,24 @@ class FCNNHZ(nn.Module):
         resnet = [None] * nc
         for i in range(nc):
             resnet[i] = models.resnet18()
-            resnet[i].fc.out_features = classes
+            resnet[i].fc = nn.Linear(resnet[i].fc.in_features, classes)
         self.f = nn.ModuleList(resnet)
         self.S = torch.zeros(nc)  # set of clients
+
+    def net(self, x, c):
+        x2 = x[c]
+        s = x2.shape
+        # print('s[{0}]: {1}'.format(c, s))
+        nan_imgs = torch.sum(torch.any(x2.isnan(), dim=(2, 3, 4)), dim=1)
+        print('NaN Images: {0}'.format(nan_imgs))
+        x2 = x2.reshape(s[0] * s[1], s[2], s[3], s[4])
+        print('With NaNs: {0}'.format(x2.shape))
+        x2 = x2[~torch.any(x2.isnan(), dim=(1, 2, 3))]
+        print('W.0 NaNs: {0}'.format(x2.shape))
+        x2 = self.f[c](x2)
+        x2 = x2.reshape(s[0], s[1], -1)
+        x2 = torch.nansum(x2, dim=1)
+        return x2
 
     def forward(self, x, client=None):
 
@@ -287,27 +302,20 @@ class FCNNHZ(nn.Module):
             ni = len(idx)
             for i in range(ni):
                 c = idx[i]
-                x2 = x[c]
-                s = x2.shape
-                x2 = x2.reshape(s[0] * s[1], s[2], s[3], s[4])
-                x = self.f[c](x2)
-                x = x.reshape(s[0], s[1], -1)
-                fl[i] = torch.sum(x, dim=1)
+                fl[i] = self.net(x, c)
 
             x = sum(fl)/ni
         else:
-            x2 = x[client]
-            s = x2.shape
-            x2 = x2.reshape(s[0] * s[1], s[2], s[3], s[4])
-            x = self.f[client](x2)
-            x = x.reshape(s[0], s[1], -1)
-            x = torch.sum(x, dim=1)
+            x = self.net(x, client)
+
+        # print('Post-ResNet shape: {0}'.format(x.shape))
 
         if self.classes == 1:
             x = torch.sigmoid(x)
             x = torch.squeeze(x, dim=1)
         else:
             x = F.softmax(x, dim=1)
+        # print('Final shape: {0}'.format(x.shape))
         return x
 
 

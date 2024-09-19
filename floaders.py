@@ -668,8 +668,8 @@ def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.
 
 
 class shape_dataset(Dataset):
-    def __init__(self, state=1226, test_size=0.2, valid_size=0.2, use='train', counts=False,
-                 dir='./data/ShapeNetRendering', transform=None, std=1, angles=None, cut=22.5, c=[], adv=[]):
+    def __init__(self, state=1226, test_size=0.2, valid_size=0.2, subsample=.25, use='train', counts=False, nimgs=False,
+                 padding=9, dir='./data/ShapeNetRendering', transform=None, std=1, angles=None, cut=22.5, c=[], adv=[]):
 
         cdirs, X, y = [dir + '/' + name for name in os.listdir(dir) if os.path.isdir(os.path.join(dir, name))], [], []
         for i in range(len(cdirs)):
@@ -681,7 +681,7 @@ class shape_dataset(Dataset):
         X, y = np.array(X), np.array(y)
 
         if angles is not None:
-            diffs = np.zeros((len(set), len(angles)))
+            diffs = np.zeros((len(X), len(angles)))
             for i in range(len(X)):
                 dir = X[i]
                 meta = np.genfromtxt(dir + '/rendering_metadata.txt', delimiter=' ')
@@ -692,7 +692,23 @@ class shape_dataset(Dataset):
                 diffs[i, :] = np.minimum(dmin, dmin2)
             diffcuts = diffs < cut
             diffcut = np.prod(diffcuts, axis=1)
-            X, y = X[diffcut], y[diffcut]
+            X, y = X[diffcut > 0], y[diffcut > 0]
+
+        if subsample is not None and subsample < 1:
+            print('Subsampling {0}% of data.'.format(subsample*100))
+            _, X, _, y = train_test_split(X, y, test_size=subsample, random_state=state)
+
+        if nimgs:
+            nimg = np.zeros((len(X), len(angles)))
+            for j in range(len(X)):
+                dir = X[j]
+                meta = np.genfromtxt(dir + '/rendering_metadata.txt', delimiter=' ')
+                for i in range(len(angles)):
+                    i1 = np.where(np.abs(meta[:, 0] - angles[i]) < cut)[0].tolist()
+                    i2 = np.where(np.abs(meta[:, 0] - angles[i] + 360) < cut)[0].tolist()
+                    i3 = i1 + i2
+                    nimg[j, i] = len(i3)
+            np.savetxt("./logs/shape_nimg.csv", nimg, delimiter=",")
 
         self.X, self.y = X, y
         X, X_test, y, y_test = train_test_split(X, y, test_size=test_size, random_state=state)
@@ -720,7 +736,7 @@ class shape_dataset(Dataset):
             transform = transforms.Compose([transforms.ToTensor(), normalize])
         self.transform = transform
 
-        self.std, self.angles, self.cut, self.c, self.adv = std, angles, cut, c, adv
+        self.std, self.angles, self.cut, self.c, self.adv, self.padding = std, angles, cut, c, adv, padding
 
     def __len__(self):
         return len(self.y)
@@ -732,17 +748,30 @@ class shape_dataset(Dataset):
         images = []
         for f in fnames:
             image = PIL.Image.open(f).convert('RGB')
+            # print('PIL image shape: {0}'.format(image.size))
             image = self.transform(image)
+            # print('transform image shape: {0}'.format(image.shape))
             images.append(image)
+        if self.padding is not None:
+            images.append(torch.full(image.shape, torch.nan))
 
         if self.angles is not None:
             meta = np.genfromtxt(dir + '/rendering_metadata.txt', delimiter=' ')
-            x = [torch.stack([images[j] for j in np.where(np.abs(meta[:, 0]-self.angles[i])<self.cut)]) \
-                 for i in range(len(self.c))]
+            imgs = []
+            for i in range(len(self.angles)):
+                i1 = np.where(np.abs(meta[:, 0]-self.angles[i]) < self.cut)[0].tolist()
+                i2 = np.where(np.abs(meta[:, 0]-self.angles[i]+360) < self.cut)[0].tolist()
+                i3 = i1 + i2
+                i3.sort()
+                if self.padding is not None:
+                    for _ in range(len(i3), self.padding):
+                        i3.append(len(images)-1)
+                imgs.append(i3)
+            x = [torch.stack([images[j] for j in imgs[i]]) for i in range(len(self.angles))]
         else:
             x = [torch.stack([images[j] for j in self.c[i]]) for i in range(len(self.c))]
         if isinstance(self.adv, list) and len(self.adv) > 0:
-            x[0][self.adv] += torch.normal(mean=0, std=self.std, size=x[0][self.adv[a]].shape)
+            x[0][self.adv] += torch.normal(mean=0, std=self.std, size=x[0][self.adv].shape)
         elif isinstance(self.adv, dict):
             for a in self.adv.keys():
                 x[a][self.adv[a]] += torch.normal(mean=0, std=self.std, size=x[a][self.adv[a]].shape)
