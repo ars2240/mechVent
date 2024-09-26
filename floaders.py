@@ -537,10 +537,6 @@ def replace_str_cols(co, col_names):
     return cols
 
 
-with open('ni_cols_orig.txt', 'r') as f:
-    cols_orig = f.read().split('\n')
-
-
 def ni_loader(batch_size=1, seed=1226, state=1226, train_size=1, valid_size=0.2, num_workers=0, pin_memory=True, std=1,
               c=[], adv=[], adv_valid=True, classes=2, plus=True, counts=False):
     np.random.seed(seed)
@@ -555,6 +551,9 @@ def ni_loader(batch_size=1, seed=1226, state=1226, train_size=1, valid_size=0.2,
         filename2 = download(u)
         u = 'http://kdd.ics.uci.edu/databases/kddcup99/corrected.gz'
         filename3 = download(u)
+
+    with open('ni_cols_orig.txt', 'r') as f:
+        cols_orig = f.read().split('\n')
 
     # import dataset
     train = pd.read_csv(filename2, header=None)
