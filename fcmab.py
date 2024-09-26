@@ -32,6 +32,11 @@ def dot(a, b):
         raise Exception('Bad dot product.')
 
 
+def cos_sim(A, B):
+    A, B = A.reshape(-1), B.reshape(-1)
+    return np.dot(A, B) / (np.linalg.norm(A) * np.linalg.norm(B))
+
+
 def timeHMS(t, head=''):
     hrs = np.floor(t / 3600)
     t = t - hrs * 3600
@@ -55,10 +60,17 @@ class fcmab(object):
     def __init__(self, model, loss, opt, nc=2, n=10, epochs=10, c=.5, keep_best=True, seed=1226, head='',
                  conf_matrix=False, adversarial=None, adv_epoch=1, adv_opt='sgd', adv_beta=(0.9, 0.999), adv_eps=1e-8,
                  adv_step=1, adv_c=[], plot=True, m=0, ab=0, ucb_c=1, xdim=1, verbose=1, fix_reset=False, sync=True,
-                 sync_freq=1, embed_mu=1):
+                 sync_freq=1, embed_mu=1, use_gpu=False):
 
         np.random.seed(seed)
         torch.manual_seed(seed)
+
+        if use_gpu and torch.cuda.is_available():
+            self.device = torch.device('cuda')
+        else:
+            if use_gpu:
+                warnings.warn('Cuda unavailable.')
+            self.device = torch.device('cpu')
 
         self.model = model  # model
         self.loss = loss  # loss
@@ -131,7 +143,7 @@ class fcmab(object):
             good = [c for c in range(self.nc) if c not in self.adv_c]
             self.n = 2 ** len(good) - 1
             print('Setting number of iterations to {0}'.format(self.n))
-        elif self.c.lower() in ['distance', 'mad']:
+        elif self.c.lower() in ['distance', 'mad', 'cos']:
             self.model.S = np.array([True] * self.nc)
         good_v = [c not in self.adv_c for c in range(self.nc)]
         s_list = np.zeros((self.n, self.nc))
@@ -142,8 +154,10 @@ class fcmab(object):
             log_file = open('./logs/' + self.head + '.log', 'a')  # open log file
             sys.stdout = log_file  # write to log file
 
+            if self.verbose >= 2 and i > 0:
+                timeHMS(time.time() - start, head='Time elapsed ')
             if self.verbose >= 1:
-                print('Iteration {0}'.format(i))
+                print('Iteration {0} of {1}'.format(i, self.n))
 
             # pull clients
             self.theta = np.random.beta(self.alpha, self.beta)
@@ -221,10 +235,14 @@ class fcmab(object):
                 bi = numberToBase(i+1, 2)
                 print(bi)
                 self.model.S[good[-len(bi):]] = [x == 1 for x in bi]
-            elif self.c.lower() in ['distance', 'mad']:
+            elif self.c.lower() in ['distance', 'mad', 'cos']:
                 c = [x for x, b in enumerate(self.model.S) if b]
                 m = self.diff[c]
-                sd = np.median(m) if 'mad' else np.sum(np.power(m, 2))/len(c)
+                sd = 1
+                if self.c.lower() == 'mad':
+                    sd = np.median(m)
+                elif self.c.lower() == 'distance':
+                    sd = np.sum(np.power(m, 2))/len(c)
                 if sd > 0:
                     zs = m/sd
                     if self.verbose >= 3:
@@ -326,13 +344,14 @@ class fcmab(object):
         for epoch in range(self.epochs):
 
             start = time.time()
+            self.model = self.model.to(self.device)
 
             for j, data in enumerate(train_loader):
 
                 if self.verbose >= 3:
                     timeHMS(time.time() - start, head='Batch {0} of {1} '.format(j, len(train_loader)))
 
-                if j == 0 and epoch == 0 and self.verbose >= 2:
+                if i == 0 and j == 0 and epoch == 0 and self.verbose >= 2:
                     X, y = data[:-1], data[-1]
                     if len(X) == 1:
                         X = X[0]
@@ -364,7 +383,7 @@ class fcmab(object):
 
             if not self.sync and epoch % self.sync_freq == 0:
                 # re-combine modes
-                sd = self.model.state_dict()
+                sd = self.model.cpu().state_dict()
                 keys = sd.keys()
                 keyVar = np.unique([k.split('.')[0] + ''.join(k.split('.')[2:]) for k in keys])
 
@@ -383,9 +402,12 @@ class fcmab(object):
                         m2 = torch.from_numpy(m2) if isinstance(m2, np.ndarray) else m2
                         for j in range(self.nc):
                             k2 = keys2[j]
-                            self.diff[j] += np.linalg.norm(sd[k2] - m2) ** 2 if j in c else 0
+                            if self.c.lower() == 'cos':
+                                self.diff[j] += cos_sim(sd[k2], m2) if j in c else 0
+                            else:
+                                self.diff[j] += np.linalg.norm(sd[k2] - m2) ** 2 if j in c else 0
                             sd[k2] = m
-                self.diff = np.sqrt(self.diff)
+                self.diff = self.diff if self.c.lower() == 'cos' else np.sqrt(self.diff)
                 self.model.load_state_dict(sd)
 
                 start3 = time.time()
@@ -596,7 +618,7 @@ class fcmab(object):
 
     def model_loss(self, data, client=None, adversarial=False, split=False):
 
-        X, y = data[:-1], data[-1]
+        X, y = data[:-1].to(self.device), data[-1].to(self.device)
 
         if adversarial and self.adversarial is None:
             raise Exception("No adversarial client selected.")
@@ -658,7 +680,7 @@ class fcmab(object):
             else:
                 _, predicted = torch.max(out.data, 1)
 
-            acc = torch.mean((predicted == y).float()).item() * 100
+            acc = torch.mean((predicted == y).float()).cpu().item() * 100
 
             loss_list.append(l.item())
             acc_list.append(acc)
@@ -759,7 +781,8 @@ def make_list(x):
 
 
 class main(object):
-    def __init__(self, data, advs=None, c=10, advf=None, shared=None, strategy=None, model=None, verbose=1):
+    def __init__(self, data, advs=None, c=10, advf=None, shared=None, strategy=None, model=None, verbose=1,
+                 use_gpu=False):
         self.data = make_list(data)  # forest, ni, or ibm
         self.advs = make_list(advs)  # RandPert or AdvHztl
         self.c = make_list(c)  # number of clients
@@ -768,6 +791,7 @@ class main(object):
         self.strategy = make_list(strategy)  # strategies
         self.model = make_list(model)  # models
         self.verbose = verbose  # how much to print
+        self.use_gpu = use_gpu  # if GPUs are used
         self.f0, self.f1, self.classes = None, None, None
 
     def get_shared(self, d, c):
@@ -1099,13 +1123,13 @@ class main(object):
         return tr_loader, val_loader, te_loader
 
     def get_strategies(self):
-        return ['allgood', 'mab', 'mad']
+        return ['allgood', 'mab', 'mad', 'cos']
 
     def get_models(self, d, strat):
         if d in ['shape']:
-            return ['FCNNHZ'] if strat in ['mad'] else ['FLCNN']
+            return ['FCNNHZ'] if strat in ['distance', 'mad', 'cos'] else ['FLCNN']
         else:
-            return ['FLRHZ'] if strat in ['mad'] else ['FLRSH']
+            return ['FLRHZ'] if strat in ['distance', 'mad', 'cos'] else ['FLRSH']
 
     def get_model(self, m, c, cl, sh):
         if m == 'FLRSH':
@@ -1140,6 +1164,12 @@ class main(object):
     def get_advs(self):
         return ['RandPert']
 
+    def get_n(self, d):
+        if d == 'shape':
+            return 20, 5
+        else:
+            return 100, 10
+
     def run(self):
         for d in self.data:
             d = d.lower()
@@ -1162,18 +1192,27 @@ class main(object):
                                     model = self.get_model(m, c, cl, sh)
                                     opt = self.get_opt(model, d)
                                     loss = nn.CrossEntropyLoss()
+                                    n, epochs = self.get_n(d)
                                     if strat == 'allgood':
                                         tail = '{0}c{1}a_allgood_{2}_Reset'.format(cl, advf, advs)
-                                        cmab = fcmab(model, loss, opt, nc=cl, n=100, c='allgood', head=head2 + tail,
-                                                     adv_c=[*range(advf)], fix_reset=True, verbose=self.verbose)
+                                        cmab = fcmab(model, loss, opt, nc=cl, n=n, epochs=epochs, c='allgood',
+                                                     head=head2 + tail, adv_c=[*range(advf)], fix_reset=True,
+                                                     verbose=self.verbose, use_gpu=self.use_gpu)
                                     elif strat == 'mab':
                                         tail = '{0}c{1}a_{2}_Reset'.format(cl, advf, advs)
-                                        cmab = fcmab(model, loss, opt, nc=cl, n=100, c='mablin', head=head2 + tail,
-                                                     adv_c=[*range(advf)], fix_reset=True, verbose=self.verbose)
+                                        cmab = fcmab(model, loss, opt, nc=cl, n=n, epochs=epochs, c='mablin',
+                                                     head=head2 + tail, adv_c=[*range(advf)], fix_reset=True,
+                                                     verbose=self.verbose, use_gpu=self.use_gpu)
                                     elif strat == 'mad':
                                         tail = '{0}c{1}a_{2}_Asynch1_MAD2'.format(cl, advf, advs)
-                                        cmab = fcmab(model, loss, opt, nc=cl, n=100, c='mad', head=head2 + tail,
-                                                     adv_c=[*range(advf)], sync=False, ucb_c=2, verbose=self.verbose)
+                                        cmab = fcmab(model, loss, opt, nc=cl, n=n, epochs=epochs, c='mad',
+                                                     head=head2 + tail, adv_c=[*range(advf)], sync=False, ucb_c=2,
+                                                     verbose=self.verbose, use_gpu=self.use_gpu)
+                                    elif strat == 'cos':
+                                        tail = '{0}c{1}a_{2}_Asynch1_Cos0'.format(cl, advf, advs)
+                                        cmab = fcmab(model, loss, opt, nc=cl, n=n, epochs=epochs, c='cos',
+                                                     head=head2 + tail, adv_c=[*range(advf)], sync=False, ucb_c=0,
+                                                     verbose=self.verbose, use_gpu=self.use_gpu)
                                     else:
                                         raise Exception('Config not implemented.')
                                     print(head2+tail)

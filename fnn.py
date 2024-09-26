@@ -273,19 +273,26 @@ class FCNNHZ(nn.Module):
         self.f = nn.ModuleList(resnet)
         self.S = torch.zeros(nc)  # set of clients
 
+    def good_img_mat(self, good_imgs):
+        nimgs = torch.sum(good_imgs, dim=1)
+        l = len(nimgs)
+        mat = torch.zeros(l, torch.sum(nimgs).item())
+        tot = 0
+        for i in range(l):
+            ni = nimgs[i]
+            mat[i, tot:(tot + ni)] = 1/ni
+            tot += ni
+        return mat
+
     def net(self, x, c):
         x2 = x[c]
         s = x2.shape
         # print('s[{0}]: {1}'.format(c, s))
-        nan_imgs = torch.sum(torch.any(x2.isnan(), dim=(2, 3, 4)), dim=1)
-        print('NaN Images: {0}'.format(nan_imgs))
+        good_imgs = ~torch.any(x2.isnan(), dim=(2, 3, 4))
         x2 = x2.reshape(s[0] * s[1], s[2], s[3], s[4])
-        print('With NaNs: {0}'.format(x2.shape))
-        x2 = x2[~torch.any(x2.isnan(), dim=(1, 2, 3))]
-        print('W.0 NaNs: {0}'.format(x2.shape))
+        x2 = x2[good_imgs.reshape(-1)]
         x2 = self.f[c](x2)
-        x2 = x2.reshape(s[0], s[1], -1)
-        x2 = torch.nansum(x2, dim=1)
+        x2 = torch.matmul(self.good_img_mat(good_imgs), x2)
         return x2
 
     def forward(self, x, client=None):
