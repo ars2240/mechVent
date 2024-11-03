@@ -618,11 +618,14 @@ class fcmab(object):
 
     def model_loss(self, data, client=None, adversarial=False, split=False):
 
-        X, y = data[:-1].to(self.device), data[-1].to(self.device)
+        X, y = data[:-1], data[-1].to(self.device)
 
         if adversarial and self.adversarial is None:
             raise Exception("No adversarial client selected.")
+        X = X[0] if type(X) is list and len(X) == 1 else X
         for i in range(self.nc):
+            X[i] = X[i][0] if type(X[i]) is list and len(X[i]) == 1 else X[i]
+            X[i] = X[i].to(self.device)
             if adversarial and self.nc >= i + 1 and ((type(self.adversarial) == int and self.adversarial == i) or
                                                      (type(self.adversarial) == list and i in self.adversarial)):
                 X[i].requires_grad_()
@@ -1127,7 +1130,7 @@ class main(object):
 
     def get_models(self, d, strat):
         if d in ['shape']:
-            return ['FCNNHZ'] if strat in ['distance', 'mad', 'cos'] else ['FLCNN']
+            return ['FCNNHZ']
         else:
             return ['FLRHZ'] if strat in ['distance', 'mad', 'cos'] else ['FLRSH']
 
@@ -1148,13 +1151,15 @@ class main(object):
     def get_opt(self, m, d):
         return torch.optim.Adam(m.parameters(), weight_decay=.01) if d == 'ibm' else torch.optim.Adam(m.parameters())
 
-    def get_advf(self, cl):
+    def get_advf(self, cl, d=None):
         if cl == 5:
             advf = [2, 3]
         elif cl == 8:
             advf = [2, 4, 6]
         elif cl == 10:
             advf = [3, 5, 7]
+        elif cl == 20 and d == 'forest':
+            advf = [15]
         elif cl == 20:
             advf = [10, 15]
         else:
@@ -1166,7 +1171,7 @@ class main(object):
 
     def get_n(self, d):
         if d == 'shape':
-            return 20, 5
+            return 10, 5
         else:
             return 100, 10
 
@@ -1175,7 +1180,7 @@ class main(object):
             d = d.lower()
             self.get_f(d)
             for cl in self.c:
-                advfs = self.get_advf(cl) if self.advf[0] is None else self.advf
+                advfs = self.get_advf(cl, d) if self.advf[0] is None else self.advf
                 for advf in advfs:
                     advss = self.get_advs() if self.advs[0] is None else self.advs
                     for advs in advss:

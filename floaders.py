@@ -667,7 +667,7 @@ def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.
 
 
 class shape_dataset(Dataset):
-    def __init__(self, state=1226, test_size=0.2, valid_size=0.2, subsample=.25, use='train', counts=False, nimgs=False,
+    def __init__(self, state=1226, test_size=0.2, valid_size=0.2, subsample=1, use='train', counts=False, nimgs=False,
                  padding=9, dir='./data/ShapeNetRendering', transform=None, std=1, angles=None, cut=22.5, c=[], adv=[]):
 
         cdirs, X, y = [dir + '/' + name for name in os.listdir(dir) if os.path.isdir(os.path.join(dir, name))], [], []
@@ -693,7 +693,7 @@ class shape_dataset(Dataset):
             diffcut = np.prod(diffcuts, axis=1)
             X, y = X[diffcut > 0], y[diffcut > 0]
 
-        if subsample is not None and subsample < 1:
+        if subsample is not None and subsample < 1 and use in ['train', 'all']:
             print('Subsampling {0}% of data.'.format(subsample*100))
             _, X, _, y = train_test_split(X, y, test_size=subsample, random_state=state)
 
@@ -773,7 +773,11 @@ class shape_dataset(Dataset):
             x[0][self.adv] += torch.normal(mean=0, std=self.std, size=x[0][self.adv].shape)
         elif isinstance(self.adv, dict):
             for a in self.adv.keys():
-                x[a][self.adv[a]] += torch.normal(mean=0, std=self.std, size=x[a][self.adv[a]].shape)
+                advf = self.adv[a]
+                if len(advf) > 0:
+                    x[a][advf] += torch.normal(mean=0, std=self.std, size=x[a][advf].shape)
+                else:
+                    x[a] += torch.normal(mean=0, std=self.std, size=x[a].shape)
 
         y = self.y[idx]
 
@@ -781,21 +785,21 @@ class shape_dataset(Dataset):
 
 
 def shape_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.2, num_workers=0, pin_memory=True,
-                 std=1, cut=22.5, c=[], adv=[], adv_valid=True, counts=False, dir='./data/ShapeNetRendering',
-                 angles=[48.54946536, 90.02852279, 129.56504831, 164.66412299, 210.77101218, 257.82223983, 310.82768749,
-                         345.781062]):
+                 std=1, cut=22.5, subsample=.1, c=[], adv=[], adv_valid=True, counts=False,
+                 dir='./data/ShapeNetRendering', angles=[48.54946536, 90.02852279, 129.56504831, 164.66412299,
+                                                         210.77101218, 257.82223983, 310.82768749, 345.781062]):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    set = shape_dataset(state=state, test_size=test_size, valid_size=valid_size, use='train', counts=counts, dir=dir,
-                        transform=None, std=std, angles=angles, cut=cut, c=c, adv=adv)
+    set = shape_dataset(state=state, test_size=test_size, valid_size=valid_size, subsample=subsample, use='train',
+                        counts=counts, dir=dir, transform=None, std=std, angles=angles, cut=cut, c=c, adv=adv)
     train_loader = DataLoader(set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory, num_workers=num_workers)
     adv_v = adv if adv_valid else []
-    set = shape_dataset(state=state, test_size=test_size, valid_size=valid_size, use='validation', dir=dir,
-                        transform=None, std=std, angles=angles, cut=cut, c=c, adv=adv_v)
+    set = shape_dataset(state=state, test_size=test_size, valid_size=valid_size, subsample=subsample, use='validation',
+                        dir=dir, transform=None, std=std, angles=angles, cut=cut, c=c, adv=adv_v)
     valid_loader = DataLoader(set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory, num_workers=num_workers)
-    set = shape_dataset(state=state, test_size=test_size, valid_size=valid_size, use='test', dir=dir,
-                        transform=None, std=std, angles=angles, cut=cut, c=c, adv=adv)
+    set = shape_dataset(state=state, test_size=test_size, valid_size=valid_size, subsample=subsample, use='test',
+                        dir=dir, transform=None, std=std, angles=angles, cut=cut, c=c, adv=adv)
     test_loader = DataLoader(set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory, num_workers=num_workers)
 
     return train_loader, valid_loader, test_loader
