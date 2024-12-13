@@ -92,6 +92,9 @@ class fcmab(object):
         np.random.seed(seed)
         torch.manual_seed(seed)
 
+        check_folder('./logs')
+        check_folder('./models')
+
         if use_gpu and torch.cuda.is_available():
             self.device = torch.device('cuda')
         else:
@@ -141,9 +144,6 @@ class fcmab(object):
     def train(self, train_loader, val_loader, test_loader):
 
         start = time.time()
-
-        check_folder('./logs')
-        check_folder('./models')
 
         # initialize log
         old_stdout = sys.stdout  # save old output
