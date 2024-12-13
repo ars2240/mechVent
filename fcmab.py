@@ -96,7 +96,7 @@ class fcmab(object):
             self.device = torch.device('cuda')
         else:
             if use_gpu:
-                warnings.warn('Cuda unavailable.')
+                print('Cuda unavailable.')
             self.device = torch.device('cpu')
 
         self.model = model  # model
