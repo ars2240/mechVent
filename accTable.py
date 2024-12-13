@@ -29,7 +29,7 @@ elif nc == 20:
 elif nc == 10 and data == 'ibm':
     configs = [{'data': data, 'tail': '_Decay.01_RandPert_Reset', 'config': '10c3a', 'models': ['FLRSH']},
                {'data': data, 'tail': '_Decay.01_allgood_RandPert_Reset', 'config': '10c3a', 'models': ['FLRSH']},
-               {'data': data, 'tail': '_Decay.01_RandPert_Asynch1_MAD2', 'config': '10c3a', 'models': ['FLRHZ']},
+               {'data': data, 'tail': '_RandPert_Asynch1_MAD2', 'config': '10c3a', 'models': ['FLRHZ']},
                {'data': data, 'tail': '_RandPert_Asynch1_Cos0', 'config': '10c3a', 'models': ['FLRHZ']},
                {'data': data, 'tail': '_RandPert_Reset', 'config': '10c5a', 'models': ['FLRSH']},
                {'data': data, 'tail': '_allgood_RandPert_Reset', 'config': '10c5a', 'models': ['FLRSH']},

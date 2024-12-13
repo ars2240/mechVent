@@ -37,6 +37,33 @@ def cos_sim(A, B):
     return np.dot(A, B) / (np.linalg.norm(A) * np.linalg.norm(B))
 
 
+def krum(x):
+    '''
+    Modified from:
+    https://github.com/cpwan/Attack-Adaptive-Aggregation-in-Federated-Learning/blob/master/rules/multiKrum.py
+
+    compute krum or multi-krum of input. O(dn^2)
+
+    input : batchsize* vector dimension * n
+
+    return
+        krum : batchsize* vector dimension * 1
+    '''
+
+    n = x.shape[-1]
+    f = n // 2  # worse case 50% malicious points
+    k = n - f - 2
+
+    # collection distance, distance from points to points
+    cdist = torch.cdist(x, x, p=2)
+    # find the k+1 nbh of each point
+    nbhDist, nbh = torch.topk(cdist, k + 1, largest=False)
+    # the point closest to its nbh
+    i_star = torch.argmin(nbhDist.sum(2))
+    print(i_star)
+    return i_star
+
+
 def timeHMS(t, head=''):
     hrs = np.floor(t / 3600)
     t = t - hrs * 3600
@@ -107,6 +134,7 @@ class fcmab(object):
         self.sync = sync  # true if synchronous learning, false if asynchronous (sync after each training iteration).
         self.sync_freq = sync_freq  # frequency of synchronization of models
         self.embed_mu = embed_mu  # weight of embed loss
+        self.sd_vecs, self.m_dic = [], {}
         if fix_reset:
             self.save(head=self.head + '_init')
 
@@ -143,7 +171,7 @@ class fcmab(object):
             good = [c for c in range(self.nc) if c not in self.adv_c]
             self.n = 2 ** len(good) - 1
             print('Setting number of iterations to {0}'.format(self.n))
-        elif self.c.lower() in ['distance', 'mad', 'cos']:
+        elif self.c.lower() in ['distance', 'mad', 'cos', 'krum']:
             self.model.S = np.array([True] * self.nc)
         good_v = [c not in self.adv_c for c in range(self.nc)]
         s_list = np.zeros((self.n, self.nc))
@@ -247,11 +275,14 @@ class fcmab(object):
                     zs = m/sd
                     if self.verbose >= 3:
                         print(zs)
-                    cuts = zs < self.ucb_c
+                    cuts = zs > self.ucb_c if self.c.lower() == 'cos' else zs < self.ucb_c
                     z2 = [np.NAN] * self.nc
                     for j in range(len(c)):
                         self.model.S[c[j]], z2[c[j]] = cuts[j], zs[j]
                     ucb_list.append(z2)
+            elif self.c.lower() == 'krum':
+                if len(self.sd_vecs) > 0:
+                    self.model.S = krum(self.sd_vecs)
             else:
                 raise Exception('Cutoff not implemented.')
 
@@ -389,24 +420,30 @@ class fcmab(object):
 
                 c = [x for x, b in enumerate(self.model.S) if b]  # get selected clients
                 self.diff = np.zeros(self.nc)
+                self.sd_vecs, m_dic = [[] for _ in range(len(c))], {}
                 for k in keyVar:
-                    if 'embed' not in k:
+                    if 'embed' not in k and ('weight' in k or 'bias' in k):
                         keys2 = [k2 for k2 in keys if k2.split('.')[0] + ''.join(k2.split('.')[2:]) == k]
                         m = 0
                         for j in range(len(c)):
                             k2 = keys2[c[j]]
                             # print('{0} shape on client {1}: {2}'.format(k2, j, sd[k2].shape))
+                            # print('Client {0}, {1}: {2}'.format(j, k2, sd[k2]))
+                            self.sd_vecs[j].extend(sd[k2].tolist())
                             m = sd[k2] * 1 / (j + 1) + m * j / (j + 1)
                         m2 = np.median([sd[keys2[c[j]]].detach().numpy() for j in range(len(c))], axis=0) if \
                             self.c.lower() == 'mad' else m
                         m2 = torch.from_numpy(m2) if isinstance(m2, np.ndarray) else m2
+                        m_dic[k] = m2
                         for j in range(self.nc):
                             k2 = keys2[j]
                             if self.c.lower() == 'cos':
-                                self.diff[j] += cos_sim(sd[k2], m2) if j in c else 0
+                                mo = self.m_dic[k] if k in self.m_dic.keys() else 0
+                                self.diff[j] += cos_sim(sd[k2]-mo, m2-mo) if j in c else 0
                             else:
                                 self.diff[j] += np.linalg.norm(sd[k2] - m2) ** 2 if j in c else 0
                             sd[k2] = m
+                self.m_dic = m_dic
                 self.diff = self.diff if self.c.lower() == 'cos' else np.sqrt(self.diff)
                 self.model.load_state_dict(sd)
 
@@ -784,7 +821,7 @@ def make_list(x):
 
 
 class main(object):
-    def __init__(self, data, advs=None, c=10, advf=None, shared=None, strategy=None, model=None, verbose=1,
+    def __init__(self, data, advs=None, c=None, advf=None, shared=None, strategy=None, model=None, verbose=1,
                  use_gpu=False):
         self.data = make_list(data)  # forest, ni, or ibm
         self.advs = make_list(advs)  # RandPert or AdvHztl
@@ -1175,11 +1212,18 @@ class main(object):
         else:
             return 100, 10
 
+    def get_cl(self, d):
+        if d == 'shape':
+            return [8]
+        else:
+            return [5, 10, 20]
+
     def run(self):
         for d in self.data:
             d = d.lower()
             self.get_f(d)
-            for cl in self.c:
+            c = self.get_cl(d) if self.c[0] is None else self.c
+            for cl in c:
                 advfs = self.get_advf(cl, d) if self.advf[0] is None else self.advf
                 for advf in advfs:
                     advss = self.get_advs() if self.advs[0] is None else self.advs
@@ -1203,6 +1247,12 @@ class main(object):
                                         cmab = fcmab(model, loss, opt, nc=cl, n=n, epochs=epochs, c='allgood',
                                                      head=head2 + tail, adv_c=[*range(advf)], fix_reset=True,
                                                      verbose=self.verbose, use_gpu=self.use_gpu)
+                                    elif strat == 'mab' and d == 'shape':
+                                        tail = '{0}c{1}a_{2}_Asynch1_Reset'.format(cl, advf, advs)
+                                        cmab = fcmab(model, loss, opt, nc=cl, n=n, epochs=epochs, c='mablin',
+                                                     head=head2 + tail, adv_c=[*range(advf)], fix_reset=True,
+                                                     sync=False,
+                                                     verbose=self.verbose, use_gpu=self.use_gpu)
                                     elif strat == 'mab':
                                         tail = '{0}c{1}a_{2}_Reset'.format(cl, advf, advs)
                                         cmab = fcmab(model, loss, opt, nc=cl, n=n, epochs=epochs, c='mablin',
@@ -1211,12 +1261,14 @@ class main(object):
                                     elif strat == 'mad':
                                         tail = '{0}c{1}a_{2}_Asynch1_MAD2'.format(cl, advf, advs)
                                         cmab = fcmab(model, loss, opt, nc=cl, n=n, epochs=epochs, c='mad',
-                                                     head=head2 + tail, adv_c=[*range(advf)], sync=False, ucb_c=2,
+                                                     head=head2 + tail, adv_c=[*range(advf)], fix_reset=True,
+                                                     sync=False, ucb_c=2,
                                                      verbose=self.verbose, use_gpu=self.use_gpu)
                                     elif strat == 'cos':
                                         tail = '{0}c{1}a_{2}_Asynch1_Cos0'.format(cl, advf, advs)
                                         cmab = fcmab(model, loss, opt, nc=cl, n=n, epochs=epochs, c='cos',
-                                                     head=head2 + tail, adv_c=[*range(advf)], sync=False, ucb_c=0,
+                                                     head=head2 + tail, adv_c=[*range(advf)], fix_reset=True,
+                                                     sync=False, ucb_c=0,
                                                      verbose=self.verbose, use_gpu=self.use_gpu)
                                     else:
                                         raise Exception('Config not implemented.')
