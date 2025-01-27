@@ -427,7 +427,7 @@ def adv_loader(batch_size=1, num_workers=0, pin_memory=True, head='advLogReg', c
             df_1 = df[df[ccol]]
             df_0_under = df_0.sample(undersample * df_1.shape[0], random_state=state)
             df = pd.concat([df_0_under, df_1], axis=0)
-        df[ccol] = df[ccol].replace({True: 1, False: 0})
+        df[ccol] = df[ccol].map({True: 1, False: 0})
 
         # split classes & features
         X = df.values[:, :-1]
@@ -635,7 +635,7 @@ def ibm_loader(batch_size=1, seed=1226, state=1226, test_size=0.2, valid_size=0.
         df = pd.concat([df_0_under, df_1], axis=0)
         if verbose:
             print(df.shape)
-    df[ccol] = df[ccol].replace({True: 1, False: 0})
+    df[ccol] = df[ccol].map({True: 1, False: 0})
 
     # split classes & features
     X = df.values[:, :-1]

@@ -37,7 +37,7 @@ def cos_sim(A, B):
     return np.dot(A, B) / (np.linalg.norm(A) * np.linalg.norm(B))
 
 
-def krum(x):
+def krum(x, n=None):
     '''
     Modified from:
     https://github.com/cpwan/Attack-Adaptive-Aggregation-in-Federated-Learning/blob/master/rules/multiKrum.py
@@ -50,7 +50,8 @@ def krum(x):
         krum : batchsize* vector dimension * 1
     '''
 
-    n = x.shape[-1]
+    x = torch.tensor(x)
+    n = x.shape[0] if n is None else n
     f = n // 2  # worse case 50% malicious points
     k = n - f - 2
 
@@ -59,9 +60,8 @@ def krum(x):
     # find the k+1 nbh of each point
     nbhDist, nbh = torch.topk(cdist, k + 1, largest=False)
     # the point closest to its nbh
-    i_star = torch.argmin(nbhDist.sum(2))
-    print(i_star)
-    return i_star
+    i_star = torch.argmin(nbhDist.sum(-1))
+    return nbh[i_star].tolist()
 
 
 def timeHMS(t, head=''):
@@ -282,7 +282,9 @@ class fcmab(object):
                     ucb_list.append(z2)
             elif self.c.lower() == 'krum':
                 if len(self.sd_vecs) > 0:
-                    self.model.S = krum(self.sd_vecs)
+                    mk = krum(self.sd_vecs, n=self.nc)
+                    self.model.S = np.array([False] * self.nc)
+                    self.model.S[mk] = True
             else:
                 raise Exception('Cutoff not implemented.')
 
@@ -429,7 +431,7 @@ class fcmab(object):
                             k2 = keys2[c[j]]
                             # print('{0} shape on client {1}: {2}'.format(k2, j, sd[k2].shape))
                             # print('Client {0}, {1}: {2}'.format(j, k2, sd[k2]))
-                            self.sd_vecs[j].extend(sd[k2].tolist())
+                            self.sd_vecs[j].extend(sd[k2].reshape(-1).tolist())
                             m = sd[k2] * 1 / (j + 1) + m * j / (j + 1)
                         m2 = np.median([sd[keys2[c[j]]].detach().numpy() for j in range(len(c))], axis=0) if \
                             self.c.lower() == 'mad' else m
@@ -1169,7 +1171,7 @@ class main(object):
         if d in ['shape']:
             return ['FCNNHZ']
         else:
-            return ['FLRHZ'] if strat in ['distance', 'mad', 'cos'] else ['FLRSH']
+            return ['FLRHZ'] if strat in ['distance', 'mad', 'cos', 'krum'] else ['FLRSH']
 
     def get_model(self, m, c, cl, sh):
         if m == 'FLRSH':
@@ -1208,7 +1210,7 @@ class main(object):
 
     def get_n(self, d):
         if d == 'shape':
-            return 10, 5
+            return 5, 10
         else:
             return 100, 10
 
@@ -1270,6 +1272,11 @@ class main(object):
                                                      head=head2 + tail, adv_c=[*range(advf)], fix_reset=True,
                                                      sync=False, ucb_c=0,
                                                      verbose=self.verbose, use_gpu=self.use_gpu)
+                                    elif strat == 'krum':
+                                        tail = '{0}c{1}a_{2}_Asynch1_Krum'.format(cl, advf, advs)
+                                        cmab = fcmab(model, loss, opt, nc=cl, n=n, epochs=epochs, c='krum',
+                                                     head=head2 + tail, adv_c=[*range(advf)], fix_reset=True,
+                                                     sync=False, verbose=self.verbose, use_gpu=self.use_gpu)
                                     else:
                                         raise Exception('Config not implemented.')
                                     print(head2+tail)

@@ -1,7 +1,7 @@
 import math
 import numpy as np
 
-data = 'ibm'
+data = 'forest'
 nc = 20
 if nc == 20 and data == 'ibm':
     configs = [{'data': data, 'tail': '_RandPert_Reset', 'config': '20c10a', 'models': ['FLRSH']},
