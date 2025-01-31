@@ -377,7 +377,6 @@ class fcmab(object):
         for epoch in range(self.epochs):
 
             start = time.time()
-            self.model = self.model.to(self.device)
 
             for j, data in enumerate(train_loader):
 
@@ -658,6 +657,7 @@ class fcmab(object):
     def model_loss(self, data, client=None, adversarial=False, split=False):
 
         X, y = data[:-1], data[-1].to(self.device)
+        self.model = self.model.to(self.device)
 
         if adversarial and self.adversarial is None:
             raise Exception("No adversarial client selected.")
