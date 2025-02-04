@@ -1180,6 +1180,7 @@ class main(object):
             model = FLNSH(feats=c, nc=cl, classes=self.classes)
         elif m == 'FLRHZ':
             nf = int(sh + (self.f1 - sh) / cl)
+            print(f'{sh} shared features, {nf-sh} local features')
             model = FLRHZ(feats=c, nf=[sh, nf - sh], nc=cl, classes=self.classes)
         elif m == 'FCNNHZ':
             model = FCNNHZ(feats=c, nc=cl, classes=self.classes)
