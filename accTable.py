@@ -1,8 +1,8 @@
 import math
 import numpy as np
 
-data = 'ni'
-nc = 5
+data = 'forest'
+nc = 10
 if nc == 20 and data == 'ibm':
     configs = [{'data': data, 'tail': '_RandPert_Reset', 'config': '20c10a', 'models': ['FLRSH']},
                {'data': data, 'tail': '_allgood_RandPert_Reset', 'config': '20c10a', 'models': ['FLRSH']},
